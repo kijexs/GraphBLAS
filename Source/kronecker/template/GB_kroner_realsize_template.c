@@ -35,7 +35,7 @@
     GB_Bi_DECLARE (Bi, const) ; GB_Bi_PTR (Bi, B) ;
 
     const GB_A_TYPE *restrict Ax = (GB_A_TYPE *) A->x ;
-    const GB_B_TYPE *restrict Bx = (GB_A_TYPE *) B->x ;
+    const GB_B_TYPE *restrict Bx = (GB_B_TYPE *) B->x ;
 
     //--------------------------------------------------------------------------
     // count nonzero elements in result
@@ -140,7 +140,8 @@
             if (GB_C_IS_HYPER)
             { 
                 h = GB_MALLOC_MEMORY (cnvec, sizeof(int64_t), &(h_size)) ;
-                hp = GB_MALLOC_MEMORY (cnvec, sizeof(int64_t), &(hp_size)) ;
+                hp = GB_MALLOC_MEMORY (nvec_nonempty + 1, sizeof(int64_t), &(hp_size)) ;
+            
                 ASSERT (h_size == GB_Global_memtable_size (h) && hp_size == GB_Global_memtable_size (hp)) ;
                 GB_memset (h, 0, h_size, nthreads) ;
                 GB_memset (hp, 0, hp_size, nthreads) ;

@@ -189,7 +189,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     int64_t *restrict p = GB_MALLOC_MEMORY (cnvec + 1, sizeof(int64_t), &(p_size)) ;
     ASSERT (p_size == GB_Global_memtable_size (p)) ;
     GB_memset (p, 0, p_size, nthreads) ;
-    bool p_is_32 = (ctype == GrB_INT32) ;
+    bool p_is_32 = (ctype != GrB_INT64) ;
     #define P_IS_32 p_is_32
 
     size_t h_size = 0, hp_size = 0 ;
@@ -282,20 +282,20 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
     bool Cp_is_32, Cj_is_32, Ci_is_32 ;
     GB_determine_pji_is_32 (&Cp_is_32, &Cj_is_32, &Ci_is_32,
-        C_sparsity, cnzmax, (int64_t) cvlen, (int64_t) cvdim, Werk) ;
+        C_sparsity, cnz, (int64_t) cvlen, (int64_t) cvdim, Werk) ;
 
     if (C_is_hyper)
     {
         GB_OK (GB_new_bix (&C, // full, sparse, or hyper; existing header
         ctype, (int64_t) cvlen, (int64_t) cvdim, GB_ph_malloc, C_is_csc,
-        C_sparsity, true, B->hyper_switch, nvec_nonempty, cnzmax, true, C_iso,
+        C_sparsity, true, B->hyper_switch, nvec_nonempty, cnz, true, C_iso,
         Cp_is_32, Cj_is_32, Ci_is_32)) ;
     }
     else
     {
         GB_OK (GB_new_bix (&C, // full, sparse, or hyper; existing header
         ctype, (int64_t) cvlen, (int64_t) cvdim, GB_ph_malloc, C_is_csc,
-        C_sparsity, true, B->hyper_switch, cnvec, cnzmax, true, C_iso,
+        C_sparsity, true, B->hyper_switch, cnvec, cnz, true, C_iso,
         Cp_is_32, Cj_is_32, Ci_is_32)) ;
     }
 
@@ -306,7 +306,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     GB_Cp_DECLARE (Cp, ) ; GB_Cp_PTR (Cp, C) ;
     GB_Ch_DECLARE (Ch, ) ; GB_Ch_PTR (Ch, C) ;
     #define GB_Cp_IS_32 Cp_is_32
-    size_t C_elem_size = Cp_is_32 ? sizeof(int32_t) : sizeof(int64_t);
+    // size_t C_elem_size = Cp_is_32 ? sizeof(int32_t) : sizeof(int64_t);
 
     if (!C_is_full)
     {
@@ -314,19 +314,26 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         { 
             C->nvec = nvec_nonempty ;
             GB_nvec_nonempty_set (C, nvec_nonempty) ;
-            GB_memcpy (Ch, h, C_elem_size * nvec_nonempty, nthreads) ;
-            GB_FREE_MEMORY (&h, h_size) ;
-            GB_memcpy (Cp, hp, C_elem_size * nvec_nonempty, nthreads) ;
-            GB_FREE_MEMORY (&hp, hp_size) ;
-            C->nvals = GB_IGET (Cp, nvec_nonempty) ;
+
+            for (int64_t i = 0; i < nvec_nonempty; i++) {
+                GB_ISET (Ch, i, ((int64_t*)h)[i]); 
+            }
+            GB_FREE_MEMORY (&h, h_size);
+
+            for (int64_t i = 0; i <= nvec_nonempty; i++) {
+                GB_ISET (Cp, i, ((int64_t*)hp)[i]);
+            }
+            C->nvals = GB_IGET (Cp, nvec_nonempty);
+            GB_FREE_MEMORY (&hp, hp_size);
         }
         else
         { 
-            GB_memcpy (Cp, p, C_elem_size * (cnvec + 1), nthreads) ;
-            C->nvals = GB_IGET (Cp, cnvec) ;
+            for (int64_t i = 0; i <= cnvec; i++) {
+                GB_ISET (Cp, i, p[i]);
+            }
+            C->nvals = GB_IGET (Cp, cnvec);
         }
     }
-
     C->magic = GB_MAGIC ;
 
     //--------------------------------------------------------------------------
@@ -390,17 +397,19 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
         #define GB_KRONECKER_OP(Cx,pC,a,ix,jx,b,iy,jy)      \
         {                                                   \
+            GB_C_TYPE cwork[GB_VLA(csize)] ;                \
+            bool is_nonzero = false ;                       \
             if (fmult != NULL)                              \
             {                                               \
                 /* standard binary operator */              \
-                fmult (Cx +(pC)*csize, a, b) ;              \
+                fmult (cwork, a, b) ;                       \
                 for (size_t i = 0 ; i < csize ; ++i)        \
                 {                                           \
-                    if (*(Cx + (pC*csize + i)))             \
+                    if (*(cwork + i))                       \
                     {                                       \
-                        pC-- ;                              \
-                        break;                              \
-                    }                                       \
+                        is_nonzero = true ;                 \                 
+                        break ;                             \
+                    }                                       \                                   
                 }                                           \
             }                                               \
             else                                            \
@@ -408,14 +417,20 @@ GrB_Info GB_kroner                  // C = kron (A,B)
                 /* index binary operator */                 \
                 if (flipij)                                 \
                 {                                           \
-                    fmult_idx (Cx +(pC)*csize,              \
+                    fmult_idx (cwork,                       \
                         a, jx, ix, b, jy, iy, theta) ;      \
                 }                                           \
                 else                                        \
                 {                                           \
-                    fmult_idx (Cx +(pC)*csize,              \
+                    fmult_idx (cwork,                       \
                         a, ix, jx, b, iy, jy, theta) ;      \
                 }                                           \
+                is_nonzero = true ;                         \
+            }                                               \
+            if (is_nonzero)                                 \
+            {                                               \
+                memcpy(Cx +(pC)*csize, cwork, csize) ;      \
+                pC++ ;                                      \
             }                                               \
         }
 

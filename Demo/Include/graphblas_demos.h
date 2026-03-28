@@ -85,6 +85,17 @@ GrB_Info read_matrix        // read a double-precision matrix
     bool printstuff         // if true, print status to stdout
 ) ;
 
+GrB_Info read_matrix_kron   // read a double-precision matrix
+(
+    GrB_Matrix *A,          // handle of matrix to create
+    FILE *f,                // file to read the tuples from
+    bool make_symmetric,    // if true, return A as symmetric
+    bool no_self_edges,     // if true, then remove self edges from A
+    bool one_based,         // if true, input matrix is 1-based
+    bool boolean,           // if true, input is GrB_BOOL, otherwise GrB_FP64
+    bool printstuff         // if true, print status to stdout
+) ;
+
 GrB_Info random_matrix      // create a random double-precision matrix
 (
     GrB_Matrix *A_output,   // handle of matrix to create

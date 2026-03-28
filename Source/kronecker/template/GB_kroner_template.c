@@ -172,7 +172,6 @@
                     { 
                         GB_KRONECKER_OP (Cx, pC, a, iA, jA, b, iB, jB) ;
                     }
-                    pC++ ;
                 }
             }
         }
