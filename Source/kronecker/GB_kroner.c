@@ -316,12 +316,12 @@ GrB_Info GB_kroner                  // C = kron (A,B)
             GB_nvec_nonempty_set (C, nvec_nonempty) ;
 
             for (int64_t i = 0; i < nvec_nonempty; i++) {
-                GB_ISET (Ch, i, ((int64_t*)h)[i]); 
+                GB_ISET (Ch, i, h[i]); 
             }
             GB_FREE_MEMORY (&h, h_size);
 
             for (int64_t i = 0; i <= nvec_nonempty; i++) {
-                GB_ISET (Cp, i, ((int64_t*)hp)[i]);
+                GB_ISET (Cp, i, hp[i]);
             }
             C->nvals = GB_IGET (Cp, nvec_nonempty);
             GB_FREE_MEMORY (&hp, hp_size);
