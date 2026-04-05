@@ -149,10 +149,6 @@ void my_fun(void *z, const void *x, const void *y)
         break;
     }
     }
-    /*if (result) 
-    {
-        printf("a=%f, b=%f, result=%d\n", a_double, b_double, result) ;
-    }*/
     
     *(bool*)z = result;
 }
@@ -174,11 +170,10 @@ int main (int argc, char **argv)
     OK (GxB_Global_Option_get (GxB_GLOBAL_NTHREADS, &nthreads)) ;
     fprintf (stderr, "kron demo: nthreads %d\n", nthreads) ;
 
-    // printf ("argc %d\n", argc) ;
     if (argc != 5)
     {
         FREE_ALL ;
-        fprintf (stderr, "usage: kron_demo A.tsv B.tsv C.tsv\n") ;
+        fprintf (stderr, "usage: kron_demo A.csv B.csv types.txt C.csv\n") ;
         exit (1) ;
     }
 
@@ -203,7 +198,7 @@ int main (int argc, char **argv)
     OK (read_matrix_kron (&A, Afile, false, false, false, false, false)) ;
     OK (read_matrix_kron (&B, Bfile, false, false, false, false, false)) ;
     int n_bits, t_bits ;
-    fscanf(Dfile, "%d %d", &n_bits, &t_bits) ; // в итоге не переопределяем маски, они остаются нулевыми => false если присваивать к uint64_t потом при водить, потеряется маска, если к 8 сдвинем до всех 0
+    fscanf(Dfile, "%d %d", &n_bits, &t_bits) ;
     set_kron_params(n_bits, t_bits) ;
 
     fclose (Afile) ;
@@ -278,8 +273,8 @@ int main (int argc, char **argv)
 
     for (int64_t k = 0 ; k < cnvals ; k++)
     {
-        fprintf (Cfile, "%" PRIu64 ",%" PRIu64 ",%s\n",
-            I [k], J [k], X [k] ? "True" : "False") ;
+        fprintf (Cfile, "%" PRIu64 ",%" PRIu64 "\n",
+            I [k], J [k]) ;
     }
 
     GrB_BinaryOp_free(&grb_mask_check) ;

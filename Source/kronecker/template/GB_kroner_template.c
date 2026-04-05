@@ -40,7 +40,7 @@
     GB_Ci_DECLARE (Ci,      ) ; GB_Ci_PTR (Ci, C) ;
 
     const GB_A_TYPE *restrict Ax = (GB_A_TYPE *) A->x ;
-    const GB_B_TYPE *restrict Bx = (GB_A_TYPE *) B->x ;
+    const GB_B_TYPE *restrict Bx = (GB_B_TYPE *) B->x ;
           GB_C_TYPE *restrict Cx = (GB_C_TYPE *) C->x ;
 
     //--------------------------------------------------------------------------

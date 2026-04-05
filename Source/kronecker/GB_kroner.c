@@ -198,17 +198,17 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     
     struct GB_Matrix_opaque stub_header ;
     GrB_Matrix C_stub = &stub_header ; 
-    C_stub->magic = GB_MAGIC;
-    C_stub->type = ctype;               
-    C_stub->vlen = cvlen;               
-    C_stub->vdim = cvdim;               
-    C_stub->nvec = cnvec;               
-    C_stub->is_csc = C_is_csc;          
-    C_stub->sparsity_control = C_is_hyper ? GxB_HYPERSPARSE : GxB_SPARSE;
-    C_stub->p = p;                      
-    C_stub->h = h;                     
-    C_stub->x = NULL;         
-    C_stub->iso = false;    
+    C_stub->magic = GB_MAGIC ;
+    C_stub->type = ctype ;              
+    C_stub->vlen = cvlen ;               
+    C_stub->vdim = cvdim ;               
+    C_stub->nvec = cnvec ;               
+    C_stub->is_csc = C_is_csc ;          
+    C_stub->sparsity_control = C_is_hyper ? GxB_HYPERSPARSE : GxB_SPARSE ;
+    C_stub->p = p ;                      
+    C_stub->h = h ;                     
+    C_stub->x = NULL ;         
+    C_stub->iso = false ;    
 
         // via the JIT kernel
     info = GB_kroner_jit (C_stub, op, flipij, A, B, nthreads) ;
@@ -262,8 +262,9 @@ GrB_Info GB_kroner                  // C = kron (A,B)
                 {                                           \
                     if (*(c +  i))                          \
                     {                                       \
+                        cnz++ ;                             \
                         p [kC]++ ;                          \
-                        break;                              \
+                        break ;                             \
                     }                                       \
                 }                                           \
         }
@@ -322,7 +323,6 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     GB_Cp_DECLARE (Cp, ) ; GB_Cp_PTR (Cp, C) ;
     GB_Ch_DECLARE (Ch, ) ; GB_Ch_PTR (Ch, C) ;
     #define GB_Cp_IS_32 Cp_is_32
-    // size_t C_elem_size = Cp_is_32 ? sizeof(int32_t) : sizeof(int64_t);
 
     if (!C_is_full)
     {
@@ -331,23 +331,26 @@ GrB_Info GB_kroner                  // C = kron (A,B)
             C->nvec = nvec_nonempty ;
             GB_nvec_nonempty_set (C, nvec_nonempty) ;
 
-            for (int64_t i = 0; i < nvec_nonempty; i++) {
+            for (int64_t i = 0; i < nvec_nonempty; i++) 
+            {
                 GB_ISET (Ch, i, h[i]); 
             }
-            GB_FREE_MEMORY (&h, h_size);
+            GB_FREE_MEMORY (&h, h_size) ;
 
-            for (int64_t i = 0; i <= nvec_nonempty; i++) {
-                GB_ISET (Cp, i, hp[i]);
+            for (int64_t i = 0; i <= nvec_nonempty; i++) 
+            {
+                GB_ISET (Cp, i, hp[i]) ;
             }
-            C->nvals = GB_IGET (Cp, nvec_nonempty);
-            GB_FREE_MEMORY (&hp, hp_size);
+            C->nvals = GB_IGET (Cp, nvec_nonempty) ;
+            GB_FREE_MEMORY (&hp, hp_size) ;
         }
         else
         { 
-            for (int64_t i = 0; i <= cnvec; i++) {
-                GB_ISET (Cp, i, p[i]);
+            for (int64_t i = 0; i <= cnvec; i++) 
+            {
+                GB_ISET (Cp, i, p[i]) ;
             }
-            C->nvals = GB_IGET (Cp, cnvec);
+            C->nvals = GB_IGET (Cp, cnvec) ;
         }
     }
     C->magic = GB_MAGIC ;
@@ -456,7 +459,8 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         info = GrB_SUCCESS ;
     }
 
-    GB_FREE_MEMORY (&p, p_size);
+    GB_FREE_MEMORY (&p, p_size) ;
+
     //--------------------------------------------------------------------------
     // remove empty vectors from C, if hypersparse
     //--------------------------------------------------------------------------
