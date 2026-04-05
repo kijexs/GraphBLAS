@@ -196,8 +196,22 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     int64_t *restrict h = NULL ;
     int64_t *restrict hp = NULL ;
     
+    struct GB_Matrix_opaque stub_header ;
+    GrB_Matrix C_stub = &stub_header ; 
+    C_stub->magic = GB_MAGIC;
+    C_stub->type = ctype;               
+    C_stub->vlen = cvlen;               
+    C_stub->vdim = cvdim;               
+    C_stub->nvec = cnvec;               
+    C_stub->is_csc = C_is_csc;          
+    C_stub->sparsity_control = C_is_hyper ? GxB_HYPERSPARSE : GxB_SPARSE;
+    C_stub->p = p;                      
+    C_stub->h = h;                     
+    C_stub->x = NULL;         
+    C_stub->iso = false;    
+
         // via the JIT kernel
-    info = GB_kroner_jit (A, op, flipij, A, B, nthreads) ;
+    info = GB_kroner_jit (C_stub, op, flipij, A, B, nthreads) ;
 
     if (info == GrB_NO_VALUE)
     { 
@@ -248,7 +262,6 @@ GrB_Info GB_kroner                  // C = kron (A,B)
                 {                                           \
                     if (*(c +  i))                          \
                     {                                       \
-                        cnz++ ;                             \
                         p [kC]++ ;                          \
                         break;                              \
                     }                                       \
@@ -267,6 +280,9 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
     if (cnz == 0)
     { 
+        GB_FREE_MEMORY(&p, p_size) ;
+        if (h != NULL) GB_FREE_MEMORY(&h, h_size) ;
+        if (hp != NULL) GB_FREE_MEMORY(&hp, hp_size) ;
         GB_FREE_WORKSPACE ;
         return (GrB_SUCCESS) ;
     }
