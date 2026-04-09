@@ -168,6 +168,7 @@ int main (int argc, char **argv)
     GrB_Info info ;
 
     OK (GrB_init (GrB_NONBLOCKING)) ;
+    GrB_Type_set_INT32 (GrB_GLOBAL, true, GxB_BURBLE) ;
     int nthreads ;
     OK (GxB_Global_Option_get (GxB_GLOBAL_NTHREADS, &nthreads)) ;
     fprintf (stderr, "kron demo: nthreads %d\n", nthreads) ;
@@ -199,7 +200,7 @@ int main (int argc, char **argv)
     // this would be faster and take less memory if GraphBLAS had a built-in
     // read-from-file operation
     int64_t ncols_f, nrows_f ;
-    fscanf(Sfile, "%d %d",&nrows_f, &ncols_f) ;
+    fscanf(Sfile, "%ld %ld",&nrows_f, &ncols_f) ;
     read_matrix_kron (&A, Afile, false, false, false, false, false, 0, 0) ;
     read_matrix_kron (&B, Bfile, false, false, false, false, false, nrows_f, ncols_f) ;
     int n_bits, t_bits ;

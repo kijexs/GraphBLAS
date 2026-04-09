@@ -209,8 +209,8 @@
 
                         int64_t idx = NVEC_NE_GET() ;
                         h[idx] = jA * bvdim + jB ;
+                        hp[idx + 1] = p[kC+1] ;
                         NVEC_NE_INC() ;
-                        hp [NVEC_NE_GET()] = p[kC+1] ;
                     }
                 }
                 CNZ_SET(hp[NVEC_NE_GET()]) ;
