@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// GB_kroner_template: Kronecker product, C = kron (A,B)
+// GB_kroner_realsize_template: Kronecker product, C = kron (A,B)
 //------------------------------------------------------------------------------
 
 // SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2025, All Rights Reserved.
@@ -20,15 +20,67 @@
     //--------------------------------------------------------------------------
 
     #ifdef GB_JIT_KERNEL
-    GB_Ap_DECLARE (Ap, const) ; GB_Ap_PTR (Ap, A) ;
-    GB_Ah_DECLARE (Ah, const) ; GB_Ah_PTR (Ah, A) ;
-    const int64_t avlen = A->vlen ;
+        // cnz -> C->nvals
+        #define CNZ_SET(val)    do { (C)->nvals = (val); } while(0)
+        #define CNZ_INC()       do { (C)->nvals++; } while(0)
+        #define CNZ_GET()       ((C)->nvals)  
 
-    GB_Bp_DECLARE (Bp, const) ; GB_Bp_PTR (Bp, B) ;
-    GB_Bh_DECLARE (Bh, const) ; GB_Bh_PTR (Bh, B) ;
-    const int64_t bvlen = B->vlen ;
-    const int64_t bnvec = B->nvec ;
+        // nvec_nonempty -> C->nvec_nonempty 
+        #define NVEC_NE_SET(val)    do { (C)->nvec_nonempty = (val); } while(0)
+        #define NVEC_NE_INC()       do { (C)->nvec_nonempty++; } while(0)
+        #define NVEC_NE_GET()       ((C)->nvec_nonempty)
 
+        #define P_PTR() ((int64_t *) (C)->p)
+        #define H_PTR() ((int64_t *) (C)->h)
+
+        // hp -> C->i
+        #define HP_PTR()        ((int64_t *) (C)->i)
+        #define HP_SET(ptr)     do { (C)->i = (void *) (ptr); } while(0)
+
+        GB_Ap_DECLARE (Ap, const) ; GB_Ap_PTR (Ap, A) ;
+        GB_Ah_DECLARE (Ah, const) ; GB_Ah_PTR (Ah, A) ;
+        const int64_t avlen = A->vlen ;
+
+        GB_Bp_DECLARE (Bp, const) ; GB_Bp_PTR (Bp, B) ;
+        GB_Bh_DECLARE (Bh, const) ; GB_Bh_PTR (Bh, B) ;
+        const int64_t bvlen = B->vlen ;
+        const int64_t bvdim = B->vdim ;
+        const int64_t bnvec = B->nvec ;
+
+        const int64_t cnvec = C->nvec ;
+        const int64_t cvlen = C->vlen ;
+        const size_t csize = C->type->size ;
+        const int64_t cnzmax = C->plen;
+
+        //#define GB_C_IS_FULL      ((C->sparsity_control & GxB_FULL) != 0)
+        //#define GB_C_IS_HYPER     (C->sparsity_control == GxB_HYPERSPARSE)
+        #define OP_IS_POSITIONAL  ((void*)(fmult) == NULL)
+        //#define GB_C_ISO (C->iso)
+
+        #define H_MALLOC(sz)    GB_MALLOC_MEMORY((sz), sizeof(int64_t), NULL)
+        #define HP_MALLOC(sz)   GB_MALLOC_MEMORY((sz), sizeof(int64_t), NULL)
+        #define CHECK_SIZES(h_ptr, hp_ptr, h_sz, hp_sz) ((void)0)
+    #else
+        #define CNZ_SET(val)    do { cnz = (val); } while(0)
+        #define CNZ_INC()       do { cnz++; } while(0)
+        #define CNZ_GET()       (cnz)
+        
+        #define NVEC_NE_SET(val) do { nvec_nonempty = (val); } while(0)
+        #define NVEC_NE_INC()    do { nvec_nonempty++; } while(0)
+        #define NVEC_NE_GET()    (nvec_nonempty)
+        
+        #define P_PTR()     (p)
+        #define H_PTR()     (h)
+        
+        #define HP_PTR()    (hp)
+        #define HP_SET(ptr) do { hp = (ptr); } while(0)
+
+        #define H_MALLOC(sz)    GB_MALLOC_MEMORY((sz), sizeof(int64_t), &(h_size))
+        #define HP_MALLOC(sz)   GB_MALLOC_MEMORY((sz), sizeof(int64_t), &(hp_size))
+        #define CHECK_SIZES(h_ptr, hp_ptr, h_sz, hp_sz) \
+            ASSERT ((h_sz) == GB_Global_memtable_size (h_ptr) && \
+                    (hp_sz) == GB_Global_memtable_size (hp_ptr))
+        
     #endif
 
     GB_Ai_DECLARE (Ai, const) ; GB_Ai_PTR (Ai, A) ;
@@ -47,6 +99,8 @@
 
     if (!GB_C_ISO && !OP_IS_POSITIONAL)
     {
+        fprintf(stderr, "[DEBUG] Entered counting loop: cnvec=%ld, nthreads=%d\n", 
+            (long)cnvec, nthreads);
         #pragma omp parallel for num_threads(nthreads) schedule(guided)
         for (int64_t kC = 0; kC < cnvec; kC++)
         {
@@ -134,14 +188,14 @@
             }
         }
         GB_cumsum (p, false, cnvec, NULL, nthreads, Werk) ;
-        if (!(GB_C_IS_FULL = (GB_C_IS_FULL && cnz == cnzmax)))
+        if (!(GB_C_IS_FULL = (GB_C_IS_FULL && CNZ_GET() == cnzmax)))
         { 
             if (GB_C_IS_HYPER)
             { 
-                h = GB_MALLOC_MEMORY (cnvec, sizeof(int64_t), &(h_size)) ;
-                hp = GB_MALLOC_MEMORY (nvec_nonempty + 1, sizeof(int64_t), &(hp_size)) ;
-            
-                ASSERT (h_size == GB_Global_memtable_size (h) && hp_size == GB_Global_memtable_size (hp)) ;
+                h = H_MALLOC(cnvec) ;
+                hp = HP_MALLOC(NVEC_NE_GET() + 1) ;
+
+                CHECK_SIZES(h, hp, h_size, hp_size) ;
                 GB_memset (h, 0, h_size, nthreads) ;
                 GB_memset (hp, 0, hp_size, nthreads) ;
                 for (kC = 0 ; kC < cnvec ; kC++)
@@ -153,15 +207,17 @@
                         const int64_t jA = GBh_A (Ah, kA) ;
                         const int64_t jB = GBh_B (Bh, kB) ;
 
-                        h [nvec_nonempty++] = jA * bvdim + jB ;
-                        hp [nvec_nonempty] = p [kC + 1] ;
+                        int64_t idx = NVEC_NE_GET() ;
+                        h[idx] = jA * bvdim + jB ;
+                        NVEC_NE_INC() ;
+                        hp [NVEC_NE_GET()] = p[kC+1] ;
                     }
                 }
-                cnz = hp[nvec_nonempty] ;
+                CNZ_SET(hp[NVEC_NE_GET()]) ;
             }
             else
             {
-                cnz = p[cnvec] ;
+                CNZ_SET(p[cnvec]) ;
             }
         }
     }
@@ -195,9 +251,15 @@
             }
         }
 
-        GB_cumsum (p, false, cnvec, &(C->nvec_nonempty), nthreads, Werk) ;
-        cnz = p[cnvec] ;
-        if (GB_C_IS_HYPER) nvec_nonempty = cnvec ;
+        #ifdef GB_JIT_KERNEL
+            int64_t nvec_ne_tmp = C->nvec_nonempty;
+            GB_cumsum (p, false, cnvec, &nvec_ne_tmp, nthreads, Werk) ;
+            C->nvec_nonempty = nvec_ne_tmp;
+        #else
+            GB_cumsum (p, false, cnvec, &(C->nvec_nonempty), nthreads, Werk) ;
+        #endif
+        CNZ_SET(p[cnvec]) ;
+        if (GB_C_IS_HYPER) NVEC_NE_SET(cnvec) ;
     }
 }
 

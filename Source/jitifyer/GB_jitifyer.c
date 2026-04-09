@@ -550,6 +550,7 @@ GrB_Info GB_jitifyer_init (void)
         else if (IS ("unjumble"     )) c = GB_JIT_KERNEL_UNJUMBLE ;
         else if (IS ("convert_b2s"  )) c = GB_JIT_KERNEL_CONVERT_B2S ;
         else if (IS ("kroner"       )) c = GB_JIT_KERNEL_KRONER ;
+        else if (IS ("kroner_realsize"       )) c = GB_JIT_KERNEL_KRONER ;
         else if (IS ("sort"         )) c = GB_JIT_KERNEL_SORT ;
 
         // add CUDA PreJIT kernels here (future):

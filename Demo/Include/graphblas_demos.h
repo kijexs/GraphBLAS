@@ -93,7 +93,9 @@ GrB_Info read_matrix_kron   // read a double-precision matrix
     bool no_self_edges,     // if true, then remove self edges from A
     bool one_based,         // if true, input matrix is 1-based
     bool boolean,           // if true, input is GrB_BOOL, otherwise GrB_FP64
-    bool printstuff         // if true, print status to stdout
+    bool printstuff,        // if true, print status to stdout
+    int64_t forced_nrows,
+    int64_t forced_ncols
 ) ;
 
 GrB_Info random_matrix      // create a random double-precision matrix

@@ -47,9 +47,10 @@ GrB_Info GB_kroner_jit
     // get the kernel function pointer, loading or compiling it if needed
     //--------------------------------------------------------------------------
 
+    const char *kname = (C->x == NULL) ? "kroner_realsize" : "kroner" ;
     void *dl_function ;
     GrB_Info info = GB_jitifyer_load (&dl_function,
-        GB_jit_ewise_family, "kroner",
+        GB_jit_ewise_family, kname,
         hash, &encoding, suffix, NULL, NULL,
         (GB_Operator) binaryop, C->type, A->type, B->type) ;
     if (info != GrB_SUCCESS) return (info) ;

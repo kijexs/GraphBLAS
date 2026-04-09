@@ -202,19 +202,35 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     C_stub->type = ctype ;              
     C_stub->vlen = cvlen ;               
     C_stub->vdim = cvdim ;               
-    C_stub->nvec = cnvec ;               
+    C_stub->nvec = cnvec ;
+    C_stub->plen = cnzmax ;    
+    C_stub->nvals = 0 ;    
+    C_stub->nvec_nonempty = 0 ;     
     C_stub->is_csc = C_is_csc ;          
     C_stub->sparsity_control = C_is_hyper ? GxB_HYPERSPARSE : GxB_SPARSE ;
     C_stub->p = p ;                      
-    C_stub->h = h ;                     
-    C_stub->x = NULL ;         
+    C_stub->h = h ;  
+    // На этапе подсчета jit параметр C_stub->i не используется
+    // Мы временно меняем его, чтобы передать указатель hp jit         
+    C_stub->i = hp ; 
+    C_stub->x = NULL ;        
     C_stub->iso = false ;    
 
         // via the JIT kernel
     info = GB_kroner_jit (C_stub, op, flipij, A, B, nthreads) ;
-
+    
+    if (info == GrB_SUCCESS) 
+    { 
+        cnz = C_stub->nvals;
+        nvec_nonempty = C_stub->nvec_nonempty;
+        hp = (int64_t *) C_stub->i;
+    }
+    
+    fprintf(stderr, "[DEBUG] JIT counting: info=%d, GrB_NO_VALUE=%d, cnz=%ld\n", 
+        info, (int)GrB_NO_VALUE, (long)cnz);
     if (info == GrB_NO_VALUE)
     { 
+        fprintf(stderr, "[DEBUG] Using GENERIC kernel\n");
         // via the generic kernel
         #define GB_A_TYPE GB_void
         #define GB_B_TYPE GB_void
@@ -262,7 +278,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
                 {                                           \
                     if (*(c +  i))                          \
                     {                                       \
-                        cnz++ ;                             \
+                        CNZ_INC() ;                         \
                         p [kC]++ ;                          \
                         break ;                             \
                     }                                       \
@@ -271,10 +287,16 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
         #define GB_GENERIC
         #include "ewise/include/GB_ewise_shared_definitions.h"
-        #include "kronecker/template/GB_kroner_realsize_template.c"
+        #include "kronecker/template/GB_jit_kernel_kroner_realsize.c"
         info = GrB_SUCCESS ;
+    } 
+    else 
+    {
+        fprintf(stderr, "[DEBUG] Using JIT kernel (info=%d)\n", info);
     }
 
+    fprintf(stderr, "[DEBUG] op->ztype->code=%d, fmult=%p, idxbinop=%p\n",
+        op->ztype->code, (void*)op->binop_function, (void*)op->idxbinop_function);
     //--------------------------------------------------------------------------
     // quick return if C is empty
     //--------------------------------------------------------------------------
@@ -379,6 +401,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     // via the JIT kernel
     info = GB_kroner_jit (C, op, flipij, A, B, nthreads) ;
 
+    fprintf(stderr, "[DEBUG] JIT fill: info=%d\n", info);
     if (info == GrB_NO_VALUE)
     { 
         // via the generic kernel
@@ -426,9 +449,9 @@ GrB_Info GB_kroner                  // C = kron (A,B)
                 {                                           \
                     if (*(cwork + i))                       \
                     {                                       \
-                        is_nonzero = true ;                 \                 
+                        is_nonzero = true ;                 \
                         break ;                             \
-                    }                                       \                                   
+                    }                                       \
                 }                                           \
             }                                               \
             else                                            \

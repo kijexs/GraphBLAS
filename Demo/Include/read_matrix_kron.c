@@ -54,7 +54,9 @@ GrB_Info read_matrix_kron       // read a double-precision or boolean matrix
     bool no_self_edges,     // if true, then remove self edges from A
     bool one_based,         // if true, input matrix is 1-based
     bool boolean,           // if true, input is GrB_BOOL, otherwise GrB_FP64
-    bool pr                 // if true, print status to stdout
+    bool pr,                // if true, print status to stdout
+    int64_t forced_nrows,
+    int64_t forced_ncols 
 )
 {
 
@@ -156,16 +158,27 @@ GrB_Info read_matrix_kron       // read a double-precision or boolean matrix
     if (pr) printf ("ntuples: %.16g\n", (double) ntuples) ;
     int64_t nrows = 0 ;
     int64_t ncols = 0 ;
-    for (int64_t k = 0 ; k < ntuples ; k++)
+    if (forced_nrows > 0 && forced_ncols > 0)
     {
-        nrows = MAX (nrows, I [k]) ;
-        ncols = MAX (ncols, J [k]) ;
+        nrows = forced_nrows;
+        ncols = forced_ncols;
+        if (pr) printf ("nrows %.16g ncols %.16g\n",
+            (double) nrows, (double) ncols) ;
     }
-    nrows++ ;
-    ncols++ ;
+    else 
+    {
+        for (int64_t k = 0 ; k < ntuples ; k++)
+        {
+            nrows = MAX (nrows, I [k]) ;
+            ncols = MAX (ncols, J [k]) ;
+        }
+        nrows++ ;
+        ncols++ ;
 
-    if (pr) printf ("nrows %.16g ncols %.16g\n",
-        (double) nrows, (double) ncols) ;
+        if (pr) printf ("nrows %.16g ncols %.16g\n",
+            (double) nrows, (double) ncols) ;
+    }
+    
 
     //--------------------------------------------------------------------------
     // prune self edges
