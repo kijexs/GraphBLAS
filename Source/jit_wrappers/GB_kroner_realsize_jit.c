@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// GB_kroner_jit: kronecker product
+// GB_kroner_realsize_jit: kronecker product
 //------------------------------------------------------------------------------
 
 // SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2025, All Rights Reserved.
@@ -10,9 +10,9 @@
 #include "GB.h"
 #include "jitifyer/GB_stringify.h"
 
-typedef GB_JIT_KERNEL_KRONER_PROTO ((*GB_jit_dl_function)) ;
+typedef GB_JIT_KERNEL_KRONER_REALSIZE_PROTO ((*GB_jit_dl_function)) ;
 
-GrB_Info GB_kroner_jit
+GrB_Info GB_kroner_realsize_jit
 (
     // output:
     GrB_Matrix C,
@@ -49,7 +49,7 @@ GrB_Info GB_kroner_jit
 
     void *dl_function ;
     GrB_Info info = GB_jitifyer_load (&dl_function,
-        GB_jit_ewise_family, "kroner",
+        GB_jit_ewise_family, "kroner_realsize",
         hash, &encoding, suffix, NULL, NULL,
         (GB_Operator) binaryop, C->type, A->type, B->type) ;
     if (info != GrB_SUCCESS) return (info) ;

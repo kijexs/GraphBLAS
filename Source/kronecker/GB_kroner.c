@@ -217,7 +217,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     C_stub->iso = false ;    
 
         // via the JIT kernel
-    info = GB_kroner_jit (C_stub, op, flipij, A, B, nthreads) ;
+    info = GB_kroner_realsize_jit (C_stub, op, flipij, A, B, nthreads) ;
     
     if (info == GrB_SUCCESS) 
     { 
@@ -227,7 +227,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     }
     
     fprintf(stderr, "[DEBUG] JIT counting: info=%d, GrB_NO_VALUE=%d, cnz=%ld\n", 
-        info, (int)GrB_NO_VALUE, (long)cnz);
+        info, (int)GrB_NO_VALUE, (long)cnz) ;
     if (info == GrB_NO_VALUE)
     { 
         fprintf(stderr, "[DEBUG] Using GENERIC kernel\n");

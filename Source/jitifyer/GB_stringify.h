@@ -1842,6 +1842,22 @@ GrB_Info GB_kroner_jit
 ) ;
 
 //------------------------------------------------------------------------------
+// kronecker product size
+//------------------------------------------------------------------------------
+
+GrB_Info GB_kroner_realsize_jit
+(
+    // output:
+    GrB_Matrix C,
+    // input:
+    const GrB_BinaryOp binaryop,
+    const bool flipij,
+    const GrB_Matrix A,
+    const GrB_Matrix B,
+    const int nthreads
+) ;
+
+//------------------------------------------------------------------------------
 // macrofy for all methods
 //------------------------------------------------------------------------------
 
