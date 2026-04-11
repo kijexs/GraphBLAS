@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// GB_kroner_realsize_template: Kronecker product, C = kron (A,B)
+// GB_kroner_sel_template: Kronecker product, C = kron (A,B)
 //------------------------------------------------------------------------------
 
 // SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2025, All Rights Reserved.
@@ -30,12 +30,14 @@
         #define NVEC_NE_INC()       do { (C)->nvec_nonempty++; } while(0)
         #define NVEC_NE_GET()       ((C)->nvec_nonempty)
 
-        #define P_PTR() ((int64_t *) (C)->p)
-        #define H_PTR() ((int64_t *) (C)->h)
-
+        #define P_PTR  ((int64_t *) (C)->p)
+        #define H_PTR  ((int64_t *) (C)->h)
         // hp -> C->i
-        #define HP_PTR()        ((int64_t *) (C)->i)
-        #define HP_SET(ptr)     do { (C)->i = (void *) (ptr); } while(0)
+        #define HP_PTR ((int64_t *) (C)->i)
+
+        #define P_PTR_SET(ptr)   do { (C)->p = (void *)(ptr); } while(0)
+        #define H_PTR_SET(ptr)   do { (C)->h = (void *)(ptr); } while(0)
+        #define HP_PTR_SET(ptr)  do { (C)->i = (void *) (ptr); } while(0)
 
         GB_Ap_DECLARE (Ap, const) ; GB_Ap_PTR (Ap, A) ;
         GB_Ah_DECLARE (Ah, const) ; GB_Ah_PTR (Ah, A) ;
@@ -52,14 +54,17 @@
         const size_t csize = C->type->size ;
         const int64_t cnzmax = C->plen;
 
-        //#define GB_C_IS_FULL      ((C->sparsity_control & GxB_FULL) != 0)
-        //#define GB_C_IS_HYPER     (C->sparsity_control == GxB_HYPERSPARSE)
-        #define OP_IS_POSITIONAL  ((void*)(fmult) == NULL)
-        //#define GB_C_ISO (C->iso)
+        #define OP_IS_POSITIONAL  ((C)->jumbled)
 
         #define H_MALLOC(sz)    GB_MALLOC_MEMORY((sz), sizeof(int64_t), NULL)
         #define HP_MALLOC(sz)   GB_MALLOC_MEMORY((sz), sizeof(int64_t), NULL)
         #define CHECK_SIZES(h_ptr, hp_ptr, h_sz, hp_sz) ((void)0)
+        #define H_MEMSET(ptr, val, sz_var) GB_memset((ptr), (val), (sz_var), nthreads)
+        #define HP_MEMSET(ptr, val, sz_var) GB_memset((ptr), (val), (sz_var), nthreads)
+        
+        size_t h_size = 0 ;
+        size_t hp_size = 0 ;
+        #define WERK_ARG NULL
     #else
         #define CNZ_SET(val)    do { cnz = (val); } while(0)
         #define CNZ_INC()       do { cnz++; } while(0)
@@ -69,17 +74,22 @@
         #define NVEC_NE_INC()    do { nvec_nonempty++; } while(0)
         #define NVEC_NE_GET()    (nvec_nonempty)
         
-        #define P_PTR()     (p)
-        #define H_PTR()     (h)
-        
-        #define HP_PTR()    (hp)
-        #define HP_SET(ptr) do { hp = (ptr); } while(0)
+        #define P_PTR     (p)
+        #define H_PTR     (h)
+        #define HP_PTR    (hp)
+
+        #define P_PTR_SET(ptr)  do { p = (ptr); } while(0)
+        #define H_PTR_SET(ptr)  do { h = (ptr); } while(0)
+        #define HP_PTR_SET(ptr) do { hp = (ptr); } while(0)
 
         #define H_MALLOC(sz)    GB_MALLOC_MEMORY((sz), sizeof(int64_t), &(h_size))
         #define HP_MALLOC(sz)   GB_MALLOC_MEMORY((sz), sizeof(int64_t), &(hp_size))
+        #define H_MEMSET(ptr, val, sz_var) GB_memset((ptr), (val), (sz_var), nthreads)
+        #define HP_MEMSET(ptr, val, sz_var) GB_memset((ptr), (val), (sz_var), nthreads)
         #define CHECK_SIZES(h_ptr, hp_ptr, h_sz, hp_sz) \
             ASSERT ((h_sz) == GB_Global_memtable_size (h_ptr) && \
                     (hp_sz) == GB_Global_memtable_size (hp_ptr))
+        #define WERK_ARG Werk
         
     #endif
 
@@ -187,20 +197,21 @@
                 }
             }
         }
-        GB_cumsum (p, false, cnvec, NULL, nthreads, Werk) ;
-        if (!(GB_C_IS_FULL = (GB_C_IS_FULL && CNZ_GET() == cnzmax)))
+        GB_cumsum (P_PTR, false, cnvec, NULL, nthreads, WERK_ARG) ;
+        bool c_is_full = GB_C_IS_FULL ;
+        if (!(c_is_full = (c_is_full && CNZ_GET() == cnzmax)))
         { 
             if (GB_C_IS_HYPER)
             { 
-                h = H_MALLOC(cnvec) ;
-                hp = HP_MALLOC(NVEC_NE_GET() + 1) ;
+                H_PTR_SET(H_MALLOC(cnvec)) ;
+                HP_PTR_SET(HP_MALLOC(NVEC_NE_GET() + 1)) ;
 
-                CHECK_SIZES(h, hp, h_size, hp_size) ;
-                GB_memset (h, 0, h_size, nthreads) ;
-                GB_memset (hp, 0, hp_size, nthreads) ;
-                for (kC = 0 ; kC < cnvec ; kC++)
+                CHECK_SIZES(H_PTR, HP_PTR, h_size, hp_size) ;
+                H_MEMSET (H_PTR, 0, h_size) ;
+                HP_MEMSET (HP_PTR, 0, hp_size) ;
+                for (int64_t kC = 0 ; kC < cnvec ; kC++)
                 { 
-                    if (p [kC + 1] > p [kC])
+                    if (P_PTR [kC + 1] > P_PTR [kC])
                     { 
                         int64_t kA = kC / bnvec ;
                         int64_t kB = kC % bnvec ;
@@ -208,26 +219,26 @@
                         const int64_t jB = GBh_B (Bh, kB) ;
 
                         int64_t idx = NVEC_NE_GET() ;
-                        h[idx] = jA * bvdim + jB ;
-                        hp[idx + 1] = p[kC+1] ;
+                        H_PTR[idx] = jA * bvdim + jB ;
+                        HP_PTR[idx + 1] = P_PTR[kC+1] ;
                         NVEC_NE_INC() ;
                     }
                 }
-                CNZ_SET(hp[NVEC_NE_GET()]) ;
+                CNZ_SET(H_PTR[NVEC_NE_GET()]) ;
             }
             else
             {
-                CNZ_SET(p[cnvec]) ;
+                CNZ_SET(P_PTR[cnvec]) ;
             }
         }
     }
 
     else if (!GB_C_IS_FULL)
     {
-        h = GB_MALLOC_MEMORY (cnvec, sizeof(int64_t), &(h_size)) ;
-        ASSERT (h_size == GB_Global_memtable_size (h)) ;
+        H_PTR_SET(H_MALLOC(cnvec)) ;
+        ASSERT (h_size == GB_Global_memtable_size (H_PTR)) ;
         #pragma omp parallel for num_threads(nthreads) schedule(guided)
-        for (kC = 0 ; kC < cnvec ; kC++)
+        for (int64_t kC = 0 ; kC < cnvec ; kC++)
         {
             const int64_t kA = kC / bnvec ;
             const int64_t kB = kC % bnvec ;
@@ -243,22 +254,22 @@
             // determine # entries in C(:,jC), the (kC)th vector of C
             // int64_t kC = kA * bnvec + kB ;
 
-            p [kC] = aknz * bknz ;
+            P_PTR [kC] = aknz * bknz ;
 
-            if (C_is_hyper)
+            if (GB_C_IS_HYPER)
             { 
-                h [kC] = jA * bvdim + jB ;
+                H_PTR [kC] = jA * bvdim + jB ;
             }
         }
 
         #ifdef GB_JIT_KERNEL
             int64_t nvec_ne_tmp = C->nvec_nonempty;
-            GB_cumsum (p, false, cnvec, &nvec_ne_tmp, nthreads, Werk) ;
+            GB_cumsum (P_PTR, false, cnvec, &nvec_ne_tmp, nthreads, WERK_ARG) ;
             C->nvec_nonempty = nvec_ne_tmp;
         #else
-            GB_cumsum (p, false, cnvec, &(C->nvec_nonempty), nthreads, Werk) ;
+            GB_cumsum (P_PTR, false, cnvec, &(C->nvec_nonempty), nthreads, WERK_ARG) ;
         #endif
-        CNZ_SET(p[cnvec]) ;
+        CNZ_SET(P_PTR[cnvec]) ;
         if (GB_C_IS_HYPER) NVEC_NE_SET(cnvec) ;
     }
 }

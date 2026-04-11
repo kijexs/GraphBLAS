@@ -1845,7 +1845,7 @@ GrB_Info GB_kroner_jit
 // kronecker product size
 //------------------------------------------------------------------------------
 
-GrB_Info GB_kroner_realsize_jit
+GrB_Info GB_kroner_sel_jit
 (
     // output:
     GrB_Matrix C,

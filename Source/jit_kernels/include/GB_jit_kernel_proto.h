@@ -733,8 +733,8 @@ GrB_Info GB_jit_kernel_kroner                                           \
     const GB_callback_struct *restrict my_callback                      \
 )
 
-#define GB_JIT_KERNEL_KRONER_REALSIZE_PROTO(GB_jit_kernel_kroner_realsize)                \
-GrB_Info GB_jit_kernel_kroner_realsize                                           \
+#define GB_JIT_KERNEL_KRONER_SELECTOR_PROTO(GB_jit_kernel_kroner_sel)   \
+GrB_Info GB_jit_kernel_kroner_sel                                       \
 (                                                                       \
     GrB_Matrix C,                                                       \
     const GrB_Matrix A,                                                 \
@@ -918,7 +918,7 @@ GrB_Info GB_jit_kernel_AxB_dot3                                         \
 #define JIT_UNJU(g) GB_JIT_KERNEL_UNJUMBLE_PROTO(g) ;
 #define JIT_SORT(g) GB_JIT_KERNEL_SORT_PROTO(g) ;
 #define JIT_KRON(g) GB_JIT_KERNEL_KRONER_PROTO(g) ;
-#define JIT_KRON_R(g) GB_JIT_KERNEL_KRONER_REALSIZE_PROTO(g) ;
+#define JIT_KRON_S(g) GB_JIT_KERNEL_KRONER_SELECTOR_PROTO(g) ;
 #define JIT_Q(q)    GB_JIT_QUERY_PROTO(q) ;
 
 //------------------------------------------------------------------------------

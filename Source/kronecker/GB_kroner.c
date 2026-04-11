@@ -214,10 +214,11 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     // Мы временно меняем его, чтобы передать указатель hp jit         
     C_stub->i = hp ; 
     C_stub->x = NULL ;        
-    C_stub->iso = false ;    
+    C_stub->iso = false ;  
+    C_stub->jumbled = (void*)(fmult) == NULL ;
 
         // via the JIT kernel
-    info = GB_kroner_realsize_jit (C_stub, op, flipij, A, B, nthreads) ;
+    info = GB_kroner_sel_jit (C_stub, op, flipij, A, B, nthreads) ;
     
     if (info == GrB_SUCCESS) 
     { 
@@ -287,7 +288,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
         #define GB_GENERIC
         #include "ewise/include/GB_ewise_shared_definitions.h"
-        #include "kronecker/template/GB_jit_kernel_kroner_realsize.c"
+        #include "kronecker/template/GB_kroner_sel_template.c"
         info = GrB_SUCCESS ;
     } 
     else 

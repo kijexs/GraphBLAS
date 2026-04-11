@@ -121,6 +121,8 @@ foreach ( PSRC ${PRE1} )
         list ( APPEND PREPRO "JIT_SORT (" ${F} ")\n" )
     elseif ( ${F} MATCHES "^GB_jit__kroner" )
         list ( APPEND PREPRO "JIT_KRON (" ${F} ")\n" )
+    elseif ( ${F} MATCHES "^GB_jit__kroner_sel" )
+        list ( APPEND PREPRO "JIT_KRON_S (" ${F} ")\n" )
     endif ( )
 endforeach ( )
 
