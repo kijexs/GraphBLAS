@@ -192,7 +192,7 @@
                     if (!GB_C_ISO && !OP_IS_POSITIONAL)
                     { 
                         GB_C_TYPE cwork[GB_VLA(csize)] ;
-                        GB_KRONECKER_COUNTER (cwork, a, b) ;
+                        GB_KRONECKER_SELECTOR (cwork, a, b) ;
                     }
                 }
             }

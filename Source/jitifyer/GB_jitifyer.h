@@ -87,6 +87,7 @@ typedef enum
     GB_JIT_KERNEL_TRANSBIND1    = 23, // GB_transpose_op, bind1st
     GB_JIT_KERNEL_TRANSBIND2    = 24, // GB_transpose_op, bind2nd
     GB_JIT_KERNEL_KRONER        = 83, // GB_kroner
+    GB_JIT_KERNEL_KRONER_SEL    = 90, // GB_kroner_selector
 
     // apply (unary and idxunary op) methods:
     GB_JIT_KERNEL_APPLYUNOP     = 25, // GB_apply_op, GB_cast_array

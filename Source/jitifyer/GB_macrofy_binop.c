@@ -24,6 +24,7 @@ void GB_macrofy_binop
                                 // accum operator
     bool is_ewise,              // if true: binop for ewise methods
     bool is_kron,               // if true: binop for kronecker
+    bool is_kron_sel,           // if true: binop for kronecker selector
     int ecode,                  // binary operator ecode from GB_enumify_binop
     bool C_iso,                 // if true: C is iso
     GrB_BinaryOp op,
@@ -55,6 +56,10 @@ void GB_macrofy_binop
         else if (is_kron)
         { 
             fprintf (fp, "#define %s(z,x,ix,jx,y,iy,jy)\n", macro_name) ;
+        }
+        else if (is_kron_sel)
+        { 
+            fprintf (fp, "#define %s(z,x,y)\n", macro_name) ;
         }
         else
         { 
@@ -89,6 +94,11 @@ void GB_macrofy_binop
                 fprintf (fp, "#define %s(z,x,ix,jx,y,iy,jy) ", macro_name) ;
             }
         }
+        else if (is_kron_sel)
+        {
+            // operator for kronecker selector
+            fprintf (fp, "#define %s(z,x,y) ", macro_name) ;
+        }
         else if (flipxy)
         { 
             // flipped multiplicative operator (flip both xy and ij),
@@ -114,6 +124,10 @@ void GB_macrofy_binop
             if (is_kron)
             { 
                 fprintf (fp, " %s (&(z), &(x),ix,jx, &(y),iy,jy", op->name) ;
+            }
+            else if (is_kron_sel)
+            { 
+                fprintf (fp, " %s (&(z), &(x), &(y)", op->name) ;
             }
             else
             { 
@@ -814,6 +828,12 @@ void GB_macrofy_binop
                 fprintf (fp, "#define %s(z,x,ix,jx,y,iy,jy) %s\n",
                     macro_name, f) ;
             }
+        }
+        else if (is_kron_sel)
+        { 
+            // operator for kronecker selector
+            fprintf (fp, "#define %s(z,x,ix,jx,y,iy,jy) %s\n",
+                macro_name, f) ;
         }
         else if (flipxy)
         { 

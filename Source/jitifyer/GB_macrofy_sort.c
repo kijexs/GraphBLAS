@@ -71,7 +71,7 @@ void GB_macrofy_sort            // construct all macros for GxB_sort
     GB_enumify_binop (&binop_ecode, opcode, xcode, false, false) ;
 
     fprintf (fp, "\n// binary operator:\n") ;
-    GB_macrofy_binop (fp, "GB_BINOP", false, false, false, true, false,
+    GB_macrofy_binop (fp, "GB_BINOP", false, false, false, true, false, false,
         binop_ecode, false, binaryop, NULL, NULL, NULL) ;
 
     //--------------------------------------------------------------------------

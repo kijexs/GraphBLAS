@@ -271,7 +271,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
             }                                               \
         }
 
-        #define GB_KRONECKER_COUNTER(c,a,b)                 \
+        #define GB_KRONECKER_SELECTOR(c,a,b)                \
         {                                                   \
                 /* standard binary operator */              \
                 fmult (c, a, b) ;                           \

@@ -101,7 +101,7 @@ void GB_macrofy_build           // construct all macros for GB_build
     GB_enumify_binop (&dup_ecode, dup_opcode, xcode, false, false) ;
 
     fprintf (fp, "\n// binary dup operator:\n") ;
-    GB_macrofy_binop (fp, "GB_DUP", false, false, true, false, false,
+    GB_macrofy_binop (fp, "GB_DUP", false, false, true, false, false, false,
         dup_ecode, false, dup, NULL, NULL, NULL) ;
 
     if (dup_opcode == GB_FIRST_binop_code)

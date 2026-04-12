@@ -163,7 +163,7 @@ void GB_macrofy_mxm         // construct all macros for GrB_mxm
             "void" : mult->theta_type->name ;
         GB_macrofy_type (fp, "THETA", "_", theta_type_name) ;
     }
-    GB_macrofy_binop (fp, "GB_MULT", false, flipxy, false, false, false,
+    GB_macrofy_binop (fp, "GB_MULT", false, flipxy, false, false, false, false,
         mult_ecode, C_iso, mult, &f_expr, NULL, NULL) ;
 
     //--------------------------------------------------------------------------

@@ -25,6 +25,7 @@ void GB_enumify_ewise       // enumerate a GrB_eWise problem
     bool is_eWiseMult,      // if true, method is eWiseMult
     bool is_eWiseUnion,     // if true, method is eWiseUnion
     bool is_kronecker,      // if true, method is kronecker
+    bool is_kronecker_sel,  // if true, method is kronecker selector
     bool is_eWiseAdd,       // if true, method is eWiseAdd
     // C matrix:
     bool C_iso,             // if true, C is iso on output
@@ -119,7 +120,7 @@ void GB_enumify_ewise       // enumerate a GrB_eWise problem
     bool A_is_pattern = false ;
     bool B_is_pattern = false ;
 
-    if (is_eWiseMult || is_eWiseUnion || is_kronecker)
+    if (is_eWiseMult || is_eWiseUnion || is_kronecker || is_kronecker_sel)
     { 
         A_is_pattern = (xcode == 0) ;   // A is not needed if x is not used
         B_is_pattern = (ycode == 0) ;   // B is not needed if y is not used

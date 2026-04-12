@@ -82,6 +82,7 @@ void GB_macrofy_ewise           // construct all macros for GrB_eWise
 
     bool is_eadd = (kcode == GB_JIT_KERNEL_ADD) ;
     bool is_kron = (kcode == GB_JIT_KERNEL_KRONER) ;
+    bool is_kron_sel = (kcode == GB_JIT_KERNEL_KRONER_SEL) ;
 
     //--------------------------------------------------------------------------
     // describe the operator
@@ -178,8 +179,8 @@ void GB_macrofy_ewise           // construct all macros for GrB_eWise
     fprintf (fp, "\n// binary operator%s%s:\n",
         flipij ? " (flipped ij)" : "",
         flipxy ? " (flipped xy)" : "") ;
-    GB_macrofy_binop (fp, is_kron ? "GB_KRONOP" : "GB_BINOP",
-        flipij, flipxy, false, true, is_kron,
+    GB_macrofy_binop (fp, is_kron ? is_kron_sel ? "GB_KRONOP_S" : "GB_KRONOP" : "GB_BINOP",
+        flipij, flipxy, false, true, is_kron, is_kron_sel,
         binop_ecode, C_iso, binaryop, NULL, NULL, NULL) ;
 
     if (opcode == GB_SECOND_binop_code)
@@ -211,6 +212,19 @@ void GB_macrofy_ewise           // construct all macros for GrB_eWise
         { 
             ASSERT (ctype == ztype) ;
             fprintf (fp, " GB_KRONOP (Cx [p], a,ia,ja, b,ib,jb)\n") ;
+        }
+    }
+    else if (is_kron_sel)
+    {
+        fprintf (fp, "#define GB_KRONECKER_SELECTOR(Cx,a,b)") ;
+        if (C_iso)
+        { 
+            fprintf (fp, "\n") ;
+        }
+        else
+        { 
+            ASSERT (ctype == ztype) ;
+            fprintf (fp, " GB_KRONOP_S (Cx [p],a,b)\n") ;
         }
     }
     else

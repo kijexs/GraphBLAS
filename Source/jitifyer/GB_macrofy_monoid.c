@@ -53,7 +53,7 @@ void GB_macrofy_monoid  // construct the macros for a monoid
 
     int add_ecode ;
     GB_enumify_binop (&add_ecode, opcode, zcode, false, false) ;
-    GB_macrofy_binop (fp, "GB_ADD", false, false, true, false, false,
+    GB_macrofy_binop (fp, "GB_ADD", false, false, true, false, false, false,
         add_ecode, C_iso, op, NULL, u_expression, g_expression) ;
 
     //--------------------------------------------------------------------------

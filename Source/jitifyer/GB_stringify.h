@@ -148,6 +148,7 @@ void GB_enumify_ewise       // enumerate a GrB_eWise problem
     bool is_eWiseMult,      // if true, method is emult
     bool is_eWiseUnion,     // if true, method is eWiseUnion
     bool is_kron,           // if true, method is kron
+    bool is_kron_sel,       // if true, method is kron
     bool can_copy_to_C,     // if true C(i,j)=A(i,j) can bypass the op
     // C matrix:
     bool C_iso,             // if true, C is iso on output
@@ -718,6 +719,7 @@ void GB_macrofy_binop
                                 // accum operator
     bool is_ewise,              // if true: binop for ewise methods
     bool is_kron,               // if true: binop for kronecker
+    bool is_kron_sel,           // if true: binop for kronecker selector
     int ecode,                  // binary operator ecode from GB_enumify_binop
     bool C_iso,                 // if true: C is iso
     GrB_BinaryOp op,
