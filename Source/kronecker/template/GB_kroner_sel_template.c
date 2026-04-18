@@ -49,9 +49,9 @@
         const int64_t bvdim = B->vdim ;
         const int64_t bnvec = B->nvec ;
 
-        const int64_t cnvec = C->nvec ;
-        const int64_t cvlen = C->vlen ;
-        const size_t csize = C->type->size ;
+        const int64_t  cnvec = C->nvec ;
+        const int64_t  cvlen = C->vlen ;
+        const size_t   csize = C->type->size ;
         const int64_t cnzmax = C->plen;
 
         #define OP_IS_POSITIONAL  ((C)->jumbled)
@@ -109,8 +109,6 @@
 
     if (!GB_C_ISO && !OP_IS_POSITIONAL)
     {
-        fprintf(stderr, "[DEBUG] Entered counting loop: cnvec=%ld, nthreads=%d\n", 
-            (long)cnvec, nthreads);
         #pragma omp parallel for num_threads(nthreads) schedule(guided)
         for (int64_t kC = 0; kC < cnvec; kC++)
         {
@@ -139,15 +137,15 @@
             int64_t kB = kC % bnvec ;
 
             // get A(:,jA), the (kA)th vector of A
-            int64_t jA = GBh_A (Ah, kA) ;
+            int64_t jA       = GBh_A (Ah, kA) ;
             int64_t pA_start = GBp_A (Ap, kA, avlen) ;
             int64_t pA_end   = GBp_A (Ap, kA+1, avlen) ;
 
             // get B(:,jB), the (kB)th vector of B
-            int64_t jB = GBh_B (Bh, kB) ;
+            int64_t jB       = GBh_B (Bh, kB) ;
             int64_t pB_start = GBp_B (Bp, kB, bvlen) ;
             int64_t pB_end   = GBp_B (Bp, kB+1, bvlen) ;
-            int64_t bknz = pB_end - pB_start ;
+            int64_t bknz     = pB_end - pB_start ;
             if (bknz == 0) continue ;
 
             //------------------------------------------------------------------
@@ -155,7 +153,7 @@
             //------------------------------------------------------------------
 
             for (int64_t pA = pA_start ; pA < pA_end ; pA++)
-            {
+            { 
 
                 //--------------------------------------------------------------
                 // a = A(iA,jA), typecasted to op->xtype
@@ -204,7 +202,7 @@
             if (GB_C_IS_HYPER)
             { 
                 H_PTR_SET(H_MALLOC(cnvec)) ;
-                HP_PTR_SET(HP_MALLOC(NVEC_NE_GET() + 1)) ;
+                HP_PTR_SET(HP_MALLOC(cnvec)) ;
 
                 CHECK_SIZES(H_PTR, HP_PTR, h_size, hp_size) ;
                 H_MEMSET (H_PTR, 0, h_size) ;
@@ -224,22 +222,22 @@
                         NVEC_NE_INC() ;
                     }
                 }
-                CNZ_SET(H_PTR[NVEC_NE_GET()]) ;
+                CNZ_SET(HP_PTR[NVEC_NE_GET()]) ;
             }
             else
-            {
+            { 
                 CNZ_SET(P_PTR[cnvec]) ;
             }
         }
     }
 
     else if (!GB_C_IS_FULL)
-    {
+    { 
         H_PTR_SET(H_MALLOC(cnvec)) ;
         ASSERT (h_size == GB_Global_memtable_size (H_PTR)) ;
         #pragma omp parallel for num_threads(nthreads) schedule(guided)
         for (int64_t kC = 0 ; kC < cnvec ; kC++)
-        {
+        { 
             const int64_t kA = kC / bnvec ;
             const int64_t kB = kC % bnvec ;
 
@@ -263,9 +261,9 @@
         }
 
         #ifdef GB_JIT_KERNEL
-            int64_t nvec_ne_tmp = C->nvec_nonempty;
+            int64_t nvec_ne_tmp = C->nvec_nonempty ;
             GB_cumsum (P_PTR, false, cnvec, &nvec_ne_tmp, nthreads, WERK_ARG) ;
-            C->nvec_nonempty = nvec_ne_tmp;
+            C->nvec_nonempty = nvec_ne_tmp ;
         #else
             GB_cumsum (P_PTR, false, cnvec, &(C->nvec_nonempty), nthreads, WERK_ARG) ;
         #endif
