@@ -34,10 +34,12 @@
     GB_Ch_DECLARE (Ch,      ) ; GB_Ch_PTR (Ch, C) ;
     GB_C_NVALS (cnz) ;
     const int64_t cnvec = anvec * bnvec ;
-    const int64_t nvec = C->nvec ;
+    const int64_t nvec  = C->nvec ;
     const int64_t cvlen = C->vlen ;
+    #define P_PTR  ((int64_t *) (C)->p)
     #else
     int64_t nvec = C->nvec ;
+    #define P_PTR (p)
     #endif
 
     GB_Ai_DECLARE (Ai, const) ; GB_Ai_PTR (Ai, A) ;
@@ -52,30 +54,29 @@
     // C = kron (A,B)
     //--------------------------------------------------------------------------
 
-     if (GB_C_IS_HYPER)
-    {
+    if (GB_C_IS_HYPER)
+    { 
         //----------------------------------------------------------------------
-        // hypersparse C: parallelize over physical vectors (kC_phys)
+        // hypersparse C: parallelize over physical vectors (kC)
         //----------------------------------------------------------------------
 
         #pragma omp parallel for num_threads(nthreads) schedule(guided)
-        for (int64_t kC_phys = 0 ; kC_phys < nvec ; kC_phys++)
-        {
+        for (int64_t kC = 0 ; kC < cnvec ; kC++)
+        { 
             // logical vector index in C
-            int64_t kC = GBh_C (Ch, kC_phys) ;
             int64_t kA = kC / bnvec ;
             int64_t kB = kC % bnvec ;
 
             // get B(:,jB), the (kB)th vector of B
-            int64_t jB = GBh_B (Bh, kB) ;
+            int64_t jB       = GBh_B (Bh, kB) ;
             int64_t pB_start = GBp_B (Bp, kB, bvlen) ;
             int64_t pB_end   = GBp_B (Bp, kB+1, bvlen) ;
-            int64_t bknz = pB_end - pB_start ;
+            int64_t bknz     = pB_end - pB_start ;
             if (bknz == 0) continue ;
 
             // get C(:,jC) physical pointers
-            int64_t pC     = GBp_C (Cp, kC_phys,   cvlen) ;
-            int64_t pC_end = GBp_C (Cp, kC_phys+1, cvlen) ;
+            int64_t pC     = P_PTR [kC] ;
+            int64_t pC_end = P_PTR [kC+1] ;
 
             // get A(:,jA), the (kA)th vector of A
             int64_t jA = GBh_A (Ah, kA) ;
@@ -98,7 +99,7 @@
             }
 
             for (int64_t pA = pA_start ; pA < pA_end ; pA++)
-            {
+            { 
                 //--------------------------------------------------------------
                 // a = A(iA,jA), typecasted to op->xtype
                 //--------------------------------------------------------------
@@ -111,7 +112,7 @@
                 }
 
                 for (int64_t pB = pB_start ; pB < pB_end && pC < pC_end ; pB++)
-                {
+                { 
                     //--------------------------------------------------------------
                     // b = B(iB,jB), typecasted to op->ytype
                     //--------------------------------------------------------------
@@ -123,15 +124,15 @@
                     }
 
                     if (!GB_C_IS_FULL)
-                    {
+                    { 
                         GB_ISET (Ci, pC, iAblock + iB) ;
                     }
                     if (!GB_C_ISO)
-                    {
+                    { 
                         GB_KRONECKER_OP (Cx, pC, a, iA, jA, b, iB, jB) ;
                     }
                     else
-                    {
+                    { 
                         pC++ ;
                     }
                 }
@@ -277,6 +278,5 @@
             }
         }
     }
-    
 }
 
