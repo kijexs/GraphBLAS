@@ -23,6 +23,7 @@
     GB_Ap_DECLARE (Ap, const) ; GB_Ap_PTR (Ap, A) ;
     GB_Ah_DECLARE (Ah, const) ; GB_Ah_PTR (Ah, A) ;
     const int64_t avlen = A->vlen ;
+    const int64_t anvec = A->nvec ;
 
     GB_Bp_DECLARE (Bp, const) ; GB_Bp_PTR (Bp, B) ;
     GB_Bh_DECLARE (Bh, const) ; GB_Bh_PTR (Bh, B) ;
@@ -30,9 +31,13 @@
     const int64_t bnvec = B->nvec ;
 
     GB_Cp_DECLARE (Cp,      ) ; GB_Cp_PTR (Cp, C) ;
+    GB_Ch_DECLARE (Ch,      ) ; GB_Ch_PTR (Ch, C) ;
     GB_C_NVALS (cnz) ;
-    const int64_t cnvec = C->nvec ;
+    const int64_t cnvec = anvec * bnvec ;
+    const int64_t nvec = C->nvec ;
     const int64_t cvlen = C->vlen ;
+    #else
+    int64_t nvec = C->nvec ;
     #endif
 
     GB_Ai_DECLARE (Ai, const) ; GB_Ai_PTR (Ai, A) ;
@@ -46,6 +51,8 @@
     //--------------------------------------------------------------------------
     // C = kron (A,B)
     //--------------------------------------------------------------------------
+
+    int64_t cnvec_for_search = GB_C_IS_HYPER ? nvec : cnvec ;
 
     int tid ;
     #pragma omp parallel for num_threads(nthreads) schedule(static)
@@ -74,24 +81,27 @@
         int64_t pC, pC_end ;
         GB_PARTITION (pC, pC_end, cnz, tid, nthreads) ;
 
+        if (pC >= cnz || pC >= pC_end) continue ;
         // find where this task starts in C
-        int64_t kC_task = GB_search_for_vector (Cp, GB_Cp_IS_32, pC, 0, cnvec,
+        int64_t kC_task_phys = GB_search_for_vector (Cp, GB_Cp_IS_32, pC, 0, cnvec_for_search,
             cvlen) ;
-        int64_t pC_delta = pC - GBp_C (Cp, kC_task, cvlen) ;
 
+        if (kC_task_phys >= cnvec_for_search) continue ;
+
+        int64_t pC_delta = pC - GBp_C (Cp, kC_task_phys, cvlen) ;
         //----------------------------------------------------------------------
         // compute C(:,kC) for all vectors kC in this task
         //----------------------------------------------------------------------
 
-        for (int64_t kC = kC_task ; kC < cnvec && pC < pC_end ; kC++)
+        for (int64_t kC_phys = kC_task_phys ; kC_phys < cnvec_for_search && pC < pC_end ; kC_phys++)
         {
-
             //------------------------------------------------------------------
             // get the vectors C(:,jC), A(:,jA), and B(:,jB)
             //------------------------------------------------------------------
-
+            int64_t kC = GB_C_IS_HYPER ? GBh_C (Ch, kC_phys) : kC_phys ;
             // C(:,jC) = kron (A(:,jA), B(:,jB), the (kC)th vector of C,
             // where jC = GBh_C (Ch, kC)
+            
             int64_t kA = kC / bnvec ;
             int64_t kB = kC % bnvec ;
 
@@ -106,11 +116,15 @@
             int64_t pB_end   = GBp_B (Bp, kB+1, bvlen) ;
             int64_t bknz = pB_end - pB_start ;
 
+            if (bknz == 0) continue;
             // shift into the middle of A(:,jA) and B(:,jB) for the first
             // vector of C for this task.
+            int64_t pC_start = GBp_C (Cp, kC_phys, cvlen) ;
+            int64_t pC_next  = GBp_C (Cp, kC_phys + 1, cvlen) ;
+
             int64_t pA_delta = 0 ;
             int64_t pB_delta = 0 ;
-            if (kC == kC_task && bknz > 0)
+            if (kC_phys == kC_task_phys && bknz > 0)
             { 
                 pA_delta = pC_delta / bknz ;
                 pB_delta = pC_delta % bknz ;
@@ -172,9 +186,12 @@
                     { 
                         GB_KRONECKER_OP (Cx, pC, a, iA, jA, b, iB, jB) ;
                     }
+                    else
+                    {
+                        pC++ ;
+                    }
                 }
             }
         }
     }
 }
-
