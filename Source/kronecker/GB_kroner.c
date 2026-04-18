@@ -199,39 +199,39 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     struct GB_Matrix_opaque stub_header ;
     GrB_Matrix C_stub = &stub_header ; 
     C_stub->magic = GB_MAGIC ;
-    C_stub->type = ctype ;              
-    C_stub->vlen = cvlen ;               
-    C_stub->vdim = cvdim ;               
-    C_stub->nvec = cnvec ;
-    C_stub->plen = cnzmax ;    
+    C_stub->type  = ctype ;              
+    C_stub->vlen  = cvlen ;               
+    C_stub->vdim  = cvdim ;               
+    C_stub->nvec  = cnvec ;
+    C_stub->plen  = cnzmax ;    
     C_stub->nvals = 0 ;    
     C_stub->nvec_nonempty = 0 ;     
     C_stub->is_csc = C_is_csc ;          
     C_stub->sparsity_control = C_is_hyper ? GxB_HYPERSPARSE : GxB_SPARSE ;
     C_stub->p = p ;                      
     C_stub->h = h ;  
-    // На этапе подсчета jit параметр C_stub->i не используется
-    // Мы временно меняем его, чтобы передать указатель hp jit         
+    // The C_stub->i parameter is not used at the jit counting stage.
+    // Temporarily changing it to pass the hp jit pointer     
     C_stub->i = hp ; 
     C_stub->x = NULL ;        
     C_stub->iso = false ;  
     C_stub->jumbled = (void*)(fmult) == NULL ;
 
-        // via the JIT kernel
+    // via the JIT kernel
     info = GB_kroner_sel_jit (C_stub, op, flipij, A, B, nthreads) ;
     
     if (info == GrB_SUCCESS) 
     { 
-        cnz = C_stub->nvals;
-        nvec_nonempty = C_stub->nvec_nonempty;
-        hp = (int64_t *) C_stub->i;
+        cnz = C_stub->nvals ;
+        nvec_nonempty = C_stub->nvec_nonempty ;
+        hp = (int64_t *) C_stub->i ;
     }
-    
-    fprintf(stderr, "[DEBUG] JIT counting: info=%d, GrB_NO_VALUE=%d, cnz=%ld\n", 
-        info, (int)GrB_NO_VALUE, (long)cnz) ;
+
+    //fprintf(stderr, "[DEBUG] JIT counting: info=%d, GrB_NO_VALUE=%d, cnz=%ld\n", 
+        // info, (int)GrB_NO_VALUE, (long)cnz) ;
     if (info == GrB_NO_VALUE)
     { 
-        fprintf(stderr, "[DEBUG] Using GENERIC kernel\n");
+        // fprintf(stderr, "[DEBUG] Using GENERIC kernel\n");
         // via the generic kernel
         #define GB_A_TYPE GB_void
         #define GB_B_TYPE GB_void
@@ -292,12 +292,12 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         info = GrB_SUCCESS ;
     } 
     else 
-    {
+    { 
         fprintf(stderr, "[DEBUG] Using JIT kernel (info=%d)\n", info);
     }
 
-    fprintf(stderr, "[DEBUG] op->ztype->code=%d, fmult=%p, idxbinop=%p\n",
-        op->ztype->code, (void*)op->binop_function, (void*)op->idxbinop_function);
+    //fprintf(stderr, "[DEBUG] op->ztype->code=%d, fmult=%p, idxbinop=%p\n",
+        //op->ztype->code, (void*)op->binop_function, (void*)op->idxbinop_function);
     //--------------------------------------------------------------------------
     // quick return if C is empty
     //--------------------------------------------------------------------------
@@ -325,14 +325,14 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         C_sparsity, cnz, (int64_t) cvlen, (int64_t) cvdim, Werk) ;
 
     if (C_is_hyper)
-    {
+    { 
         GB_OK (GB_new_bix (&C, // full, sparse, or hyper; existing header
         ctype, (int64_t) cvlen, (int64_t) cvdim, GB_ph_malloc, C_is_csc,
         C_sparsity, true, B->hyper_switch, nvec_nonempty, cnz, true, C_iso,
         Cp_is_32, Cj_is_32, Ci_is_32)) ;
     }
     else
-    {
+    { 
         GB_OK (GB_new_bix (&C, // full, sparse, or hyper; existing header
         ctype, (int64_t) cvlen, (int64_t) cvdim, GB_ph_malloc, C_is_csc,
         C_sparsity, true, B->hyper_switch, cnvec, cnz, true, C_iso,
@@ -348,20 +348,20 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     #define GB_Cp_IS_32 Cp_is_32
 
     if (!C_is_full)
-    {
+    { 
         if (C_is_hyper)
         { 
             C->nvec = nvec_nonempty ;
             GB_nvec_nonempty_set (C, nvec_nonempty) ;
 
             for (int64_t i = 0; i < nvec_nonempty; i++) 
-            {
-                GB_ISET (Ch, i, h[i]); 
+            { 
+                GB_ISET (Ch, i, h[i]) ; 
             }
             GB_FREE_MEMORY (&h, h_size) ;
 
             for (int64_t i = 0; i <= nvec_nonempty; i++) 
-            {
+            { 
                 GB_ISET (Cp, i, hp[i]) ;
             }
             C->nvals = GB_IGET (Cp, nvec_nonempty) ;
@@ -370,7 +370,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         else
         { 
             for (int64_t i = 0; i <= cnvec; i++) 
-            {
+            { 
                 GB_ISET (Cp, i, p[i]) ;
             }
             C->nvals = GB_IGET (Cp, cnvec) ;
@@ -399,10 +399,16 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     // C = kron (A,B)
     //--------------------------------------------------------------------------
 
+    void *temporary_p = NULL ;
+    if (C_is_hyper)
+    { 
+        temporary_p = C->p ;
+        C->p = p ;
+    }
     // via the JIT kernel
     info = GB_kroner_jit (C, op, flipij, A, B, nthreads) ;
 
-    fprintf(stderr, "[DEBUG] JIT fill: info=%d\n", info);
+    //fprintf(stderr, "[DEBUG] JIT fill: info=%d\n", info);
     if (info == GrB_NO_VALUE)
     { 
         // via the generic kernel
@@ -418,6 +424,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         const int64_t bsize = B->type->size ;
 
         #define GB_C_IS_FULL C_is_full
+        #define GB_C_IS_HYPER C_is_hyper
 
         #define GB_DECLAREA(a) GB_void a [GB_VLA(asize)]
         #define GB_DECLAREB(b) GB_void b [GB_VLA(bsize)]
@@ -483,6 +490,11 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         info = GrB_SUCCESS ;
     }
 
+    if (C_is_hyper) 
+    { 
+        C->p = temporary_p ;
+    }
+    
     GB_FREE_MEMORY (&p, p_size) ;
 
     //--------------------------------------------------------------------------
