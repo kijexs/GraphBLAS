@@ -205,20 +205,54 @@
                 // shift into the middle of A(:,jA) and B(:,jB) for the first
                 // vector of C for this task.
 
-                int64_t pA_delta = 0 ;
-                int64_t pB_delta = 0 ;
                 if (kC == kC_task && bknz > 0)
                 { 
-                    pA_delta = pC_delta / bknz ;
-                    pB_delta = pC_delta % bknz ;
+                    int64_t remaining = pC_delta;
+                    int64_t pA = pA_start;
+                    int64_t pB = pB_start;
+                    bool found = false;
+                    GB_C_TYPE dummy_buf[GB_VLA(csize)];
+                     for ( ; pA < pA_end && !found; pA++)
+                {
+                    int64_t iA = GBi_A(Ai, pA, avlen);
+                    if (!GB_A_ISO) GB_GETA(a, Ax, pA, false);
+
+                    for (pB = pB_start; pB < pB_end; pB++)
+                    {
+                        int64_t iB = GBi_B(Bi, pB, bvlen);
+                        if (!GB_B_ISO) GB_GETB(b, Bx, pB, false);
+
+                        // Используем GB_KRONECKER_OP с фиктивным буфером,
+                        // чтобы проверить, стал бы элемент ненулевым
+                        int64_t dummy_pC = 0; 
+                        GB_KRONECKER_OP(dummy_buf, dummy_pC, a, iA, jA, b, iB, jB);
+                        // Макрос инкрементирует dummy_pC только если ненулевой
+                        if (dummy_pC > 0)  // значит, был ненулевой
+                        {
+                            if (remaining == 0)
+                            {
+                                found = true;
+                                pA_start = pA;
+                                pB_start = pB;
+                                break;
+                            }
+                            remaining--;
+                        }
+                    }
+                }
+                // На случай, если pC_delta оказался больше числа ненулевых в векторе
+                if (!found)
+                {
+                    pA_start = pA_end;
+                }
+                pC_delta = 0;  // сброс для следующих векторов
                 }
 
                 //------------------------------------------------------------------
                 // for all entries in A(:,jA), skipping entries for first vector
                 //------------------------------------------------------------------
 
-                int64_t pA = pA_start + pA_delta ;
-                pA_delta = 0 ;
+                int64_t pA = pA_start ;
                 for ( ; pA < pA_end && pC < pC_end ; pA++)
                 {
 
@@ -239,8 +273,7 @@
 
                     // scan B(:,jB), skipping to the first entry of C if this is
                     // the first time B is accessed in this task
-                    int64_t pB = pB_start + pB_delta ;
-                    pB_delta = 0 ;
+                    int64_t pB = pB_start ;
                     for ( ; pB < pB_end && pC < pC_end ; pB++)
                     { 
 
