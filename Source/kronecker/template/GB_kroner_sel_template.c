@@ -19,25 +19,38 @@
     // get inputs
     //--------------------------------------------------------------------------
 
+    //--------------------------------------------------------------------------
+    // macros to abstract JIT access to counters and output arrays
+    //--------------------------------------------------------------------------
     #ifdef GB_JIT_KERNEL
+        // In JIT mode, counters and arrays are accessed via C fields.
         // cnz -> C->nvals
-        #define CNZ_SET(val)    do { (C)->nvals = (val); } while(0)
-        #define CNZ_INC()       do { (C)->nvals++; } while(0)
-        #define CNZ_GET()       ((C)->nvals)  
+        #define CNZ_SET(val)       do { (C)->nvals = (val) ; } while(0)
+        #define CNZ_INC()          do { (C)->nvals++ ; } while(0)
+        #define CNZ_GET()          ((C)->nvals)
 
         // nvec_nonempty -> C->nvec_nonempty 
-        #define NVEC_NE_SET(val)    do { (C)->nvec_nonempty = (val); } while(0)
-        #define NVEC_NE_INC()       do { (C)->nvec_nonempty++; } while(0)
-        #define NVEC_NE_GET()       ((C)->nvec_nonempty)
+        #define NVEC_NE_SET(val)   do { (C)->nvec_nonempty = (val) ; } while(0)
+        #define NVEC_NE_INC()      do { (C)->nvec_nonempty++ ; } while(0)
+        #define NVEC_NE_GET()      ((C)->nvec_nonempty)
 
-        #define P_PTR  ((int64_t *) (C)->p)
-        #define H_PTR  ((int64_t *) (C)->h)
+        #define P_PTR              ((int64_t *) (C)->p)
+        #define H_PTR              ((int64_t *) (C)->h)
         // hp -> C->i
-        #define HP_PTR ((int64_t *) (C)->i)
+        #define HP_PTR             ((int64_t *) (C)->i)
 
-        #define P_PTR_SET(ptr)   do { (C)->p = (void *)(ptr); } while(0)
-        #define H_PTR_SET(ptr)   do { (C)->h = (void *)(ptr); } while(0)
-        #define HP_PTR_SET(ptr)  do { (C)->i = (void *) (ptr); } while(0)
+        #define P_PTR_SET(ptr)     do { (C)->p = (void *)(ptr) ; } while(0)
+        #define H_PTR_SET(ptr)     do { (C)->h = (void *)(ptr) ; } while(0)
+        #define HP_PTR_SET(ptr)    do { (C)->i = (void *)(ptr) ; } while(0)
+
+        #define H_MALLOC(sz)       GB_MALLOC_MEMORY((sz), sizeof(int64_t), NULL)
+        #define HP_MALLOC(sz)      GB_MALLOC_MEMORY((sz), sizeof(int64_t), NULL)
+        
+        #define CHECK_SIZES(h_ptr, hp_ptr, h_sz, hp_sz) ((void)0)
+        #define H_MEMSET(ptr, val, sz_var)              GB_memset((ptr), (val), (sz_var), nthreads)
+        #define HP_MEMSET(ptr, val, sz_var)             GB_memset((ptr), (val), (sz_var), nthreads)
+        #define OP_IS_POSITIONAL                        ((C)->jumbled)
+        #define WERK_ARG                                NULL
 
         GB_Ap_DECLARE (Ap, const) ; GB_Ap_PTR (Ap, A) ;
         GB_Ah_DECLARE (Ah, const) ; GB_Ah_PTR (Ah, A) ;
@@ -45,46 +58,39 @@
 
         GB_Bp_DECLARE (Bp, const) ; GB_Bp_PTR (Bp, B) ;
         GB_Bh_DECLARE (Bh, const) ; GB_Bh_PTR (Bh, B) ;
-        const int64_t bvlen = B->vlen ;
-        const int64_t bvdim = B->vdim ;
-        const int64_t bnvec = B->nvec ;
+        const int64_t  bvlen = B->vlen ;
+        const int64_t  bvdim = B->vdim ;
+        const int64_t  bnvec = B->nvec ;
 
         const int64_t  cnvec = C->nvec ;
         const int64_t  cvlen = C->vlen ;
         const size_t   csize = C->type->size ;
-        const int64_t cnzmax = C->plen;
-
-        #define OP_IS_POSITIONAL  ((C)->jumbled)
-
-        #define H_MALLOC(sz)    GB_MALLOC_MEMORY((sz), sizeof(int64_t), NULL)
-        #define HP_MALLOC(sz)   GB_MALLOC_MEMORY((sz), sizeof(int64_t), NULL)
-        #define CHECK_SIZES(h_ptr, hp_ptr, h_sz, hp_sz) ((void)0)
-        #define H_MEMSET(ptr, val, sz_var) GB_memset((ptr), (val), (sz_var), nthreads)
-        #define HP_MEMSET(ptr, val, sz_var) GB_memset((ptr), (val), (sz_var), nthreads)
+        const int64_t cnzmax = C->plen ;
         
-        size_t h_size = 0 ;
-        size_t hp_size = 0 ;
-        #define WERK_ARG NULL
+        size_t h_size        = 0 ;
+        size_t hp_size       = 0 ;
     #else
-        #define CNZ_SET(val)    do { cnz = (val); } while(0)
-        #define CNZ_INC()       do { cnz++; } while(0)
-        #define CNZ_GET()       (cnz)
+        // In generic mode, local variables p, h, hp are used.
+        #define CNZ_SET(val)       do { cnz = (val) ; } while(0)
+        #define CNZ_INC()          do { cnz++ ; } while(0)
+        #define CNZ_GET()          (cnz)
         
-        #define NVEC_NE_SET(val) do { nvec_nonempty = (val); } while(0)
-        #define NVEC_NE_INC()    do { nvec_nonempty++; } while(0)
-        #define NVEC_NE_GET()    (nvec_nonempty)
+        #define NVEC_NE_SET(val)   do { nvec_nonempty = (val) ; } while(0)
+        #define NVEC_NE_INC()      do { nvec_nonempty++ ; } while(0)
+        #define NVEC_NE_GET()      (nvec_nonempty)
         
-        #define P_PTR     (p)
-        #define H_PTR     (h)
-        #define HP_PTR    (hp)
+        #define P_PTR              (p)
+        #define H_PTR              (h)
+        #define HP_PTR             (hp)
 
-        #define P_PTR_SET(ptr)  do { p = (ptr); } while(0)
-        #define H_PTR_SET(ptr)  do { h = (ptr); } while(0)
-        #define HP_PTR_SET(ptr) do { hp = (ptr); } while(0)
+        #define P_PTR_SET(ptr)     do { p = (ptr) ; } while(0)
+        #define H_PTR_SET(ptr)     do { h = (ptr) ; } while(0)
+        #define HP_PTR_SET(ptr)    do { hp = (ptr) ; } while(0)
 
-        #define H_MALLOC(sz)    GB_MALLOC_MEMORY((sz), sizeof(int64_t), &(h_size))
-        #define HP_MALLOC(sz)   GB_MALLOC_MEMORY((sz), sizeof(int64_t), &(hp_size))
-        #define H_MEMSET(ptr, val, sz_var) GB_memset((ptr), (val), (sz_var), nthreads)
+        #define H_MALLOC(sz)       GB_MALLOC_MEMORY((sz), sizeof(int64_t), &(h_size))
+        #define HP_MALLOC(sz)      GB_MALLOC_MEMORY((sz), sizeof(int64_t), &(hp_size))
+        
+        #define H_MEMSET(ptr, val, sz_var)  GB_memset((ptr), (val), (sz_var), nthreads)
         #define HP_MEMSET(ptr, val, sz_var) GB_memset((ptr), (val), (sz_var), nthreads)
         #define CHECK_SIZES(h_ptr, hp_ptr, h_sz, hp_sz) \
             ASSERT ((h_sz) == GB_Global_memtable_size (h_ptr) && \
@@ -108,10 +114,10 @@
     //----------------------------------------------------------------------
 
     if (!GB_C_ISO && !OP_IS_POSITIONAL)
-    {
+    { 
         #pragma omp parallel for num_threads(nthreads) schedule(guided)
         for (int64_t kC = 0; kC < cnvec; kC++)
-        {
+        { 
             //----------------------------------------------------------------------
             // get the iso values of A and B
             //----------------------------------------------------------------------
@@ -154,7 +160,6 @@
 
             for (int64_t pA = pA_start ; pA < pA_end ; pA++)
             { 
-
                 //--------------------------------------------------------------
                 // a = A(iA,jA), typecasted to op->xtype
                 //--------------------------------------------------------------

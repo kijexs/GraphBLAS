@@ -196,9 +196,12 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     int64_t *restrict h = NULL ;
     int64_t *restrict hp = NULL ;
     
+    // A temporary stub matrix is created so the JIT (or generic) selector
+    // can access p, h, and hp as ordinary C fields.
     struct GB_Matrix_opaque stub_header ;
     GrB_Matrix C_stub = &stub_header ; 
     C_stub->magic = GB_MAGIC ;
+    // map working arrays into the stub matrix
     C_stub->type  = ctype ;              
     C_stub->vlen  = cvlen ;               
     C_stub->vdim  = cvdim ;               
@@ -210,11 +213,12 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     C_stub->sparsity_control = C_is_hyper ? GxB_HYPERSPARSE : GxB_SPARSE ;
     C_stub->p = p ;                      
     C_stub->h = h ;  
-    // The C_stub->i parameter is not used at the jit counting stage.
-    // Temporarily changing it to pass the hp jit pointer     
+    // C->i is not used by the selector; pass hp through it   
     C_stub->i = hp ; 
     C_stub->x = NULL ;        
     C_stub->iso = false ;  
+    // jumbled acts as a flag: non‑NULL if the operator is positional.
+    // (Positional ops always produce a value, so counting is trivial.)
     C_stub->jumbled = (void*)(fmult) == NULL ;
 
     // via the JIT kernel
@@ -227,11 +231,8 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         hp = (int64_t *) C_stub->i ;
     }
 
-    //fprintf(stderr, "[DEBUG] JIT counting: info=%d, GrB_NO_VALUE=%d, cnz=%ld\n", 
-        // info, (int)GrB_NO_VALUE, (long)cnz) ;
     if (info == GrB_NO_VALUE)
     { 
-        // fprintf(stderr, "[DEBUG] Using GENERIC kernel\n");
         // via the generic kernel
         #define GB_A_TYPE GB_void
         #define GB_B_TYPE GB_void
@@ -271,9 +272,9 @@ GrB_Info GB_kroner                  // C = kron (A,B)
             }                                               \
         }
 
+        // standard binary operator; count only non-zero results
         #define GB_KRONECKER_SELECTOR(c,a,b)                \
         {                                                   \
-                /* standard binary operator */              \
                 fmult (c, a, b) ;                           \
                 for (size_t i = 0 ; i < csize ; ++i)        \
                 {                                           \
@@ -291,13 +292,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         #include "kronecker/template/GB_kroner_sel_template.c"
         info = GrB_SUCCESS ;
     } 
-    else 
-    { 
-        fprintf(stderr, "[DEBUG] Using JIT kernel (info=%d)\n", info);
-    }
 
-    //fprintf(stderr, "[DEBUG] op->ztype->code=%d, fmult=%p, idxbinop=%p\n",
-        //op->ztype->code, (void*)op->binop_function, (void*)op->idxbinop_function);
     //--------------------------------------------------------------------------
     // quick return if C is empty
     //--------------------------------------------------------------------------
@@ -324,6 +319,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     GB_determine_pji_is_32 (&Cp_is_32, &Cj_is_32, &Ci_is_32,
         C_sparsity, cnz, (int64_t) cvlen, (int64_t) cvdim, Werk) ;
 
+    // C_is_hyper special case: allocate only nvec_nonempty vectors
     if (C_is_hyper)
     { 
         GB_OK (GB_new_bix (&C, // full, sparse, or hyper; existing header
@@ -399,16 +395,18 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     // C = kron (A,B)
     //--------------------------------------------------------------------------
 
+    // temporarily use full-length p so the fill kernel can index
+    // all vectors 0..cnvec-1
     void *temporary_p = NULL ;
     if (C_is_hyper)
     { 
         temporary_p = C->p ;
         C->p = p ;
     }
+
     // via the JIT kernel
     info = GB_kroner_jit (C, op, flipij, A, B, nthreads) ;
 
-    //fprintf(stderr, "[DEBUG] JIT fill: info=%d\n", info);
     if (info == GrB_NO_VALUE)
     { 
         // via the generic kernel
