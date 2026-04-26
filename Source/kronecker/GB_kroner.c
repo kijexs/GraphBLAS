@@ -495,6 +495,15 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     
     GB_FREE_MEMORY (&p, p_size) ;
 
+    if (h != NULL)
+    { 
+        GB_FREE_MEMORY (&h, h_size) ;
+    }
+    if (hp != NULL)
+    { 
+        GB_FREE_MEMORY (&hp, hp_size) ;
+    }
+    
     //--------------------------------------------------------------------------
     // remove empty vectors from C, if hypersparse
     //--------------------------------------------------------------------------
