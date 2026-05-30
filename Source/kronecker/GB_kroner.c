@@ -513,14 +513,6 @@ GrB_Info GB_kroner                  // C = kron (A,B)
             {                                               \
                 /* standard binary operator */              \
                 fmult (Cx +(pC)*csize, a, b) ;              \
-                for (size_t i = 0 ; i < csize ; ++i)        \
-                {                                           \
-                    if (*(Cx + (pC*csize + i)))             \
-                    {                                       \
-                        pC++ ;                              \
-                        break ;                             \
-                    }                                       \
-                }                                           \
             }                                               \
             else                                            \
             {                                               \
@@ -535,7 +527,6 @@ GrB_Info GB_kroner                  // C = kron (A,B)
                     fmult_idx (Cx +(pC)*csize,              \
                         a, ix, jx, b, iy, jy, theta) ;      \
                 }                                           \
-                pC++ ;                                      \
             }                                               \
         }
 
