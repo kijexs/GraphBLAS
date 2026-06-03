@@ -461,16 +461,14 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
     // temporarily use full-length p so the fill kernel can index
     // all vectors 0..cnvec-1
-    void *temporary_p = NULL ;
-    if (C_is_hyper)
-    { 
-        temporary_p = C->p ;
-        C->p = p ;
-    }
+    void *temporary_p = C->p ;
+    C->p = p ;
 
     // via the JIT kernel
     info = GB_kroner_jit (C, op, flipij, A, B, nthreads) ;
 
+    C->p = temporary_p ;
+    
     if (info == GrB_NO_VALUE)
     { 
         // via the generic kernel
@@ -534,11 +532,6 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         #include "ewise/include/GB_ewise_shared_definitions.h"
         #include "kronecker/template/GB_kroner_template.c"
         info = GrB_SUCCESS ;
-    }
-
-    if (C_is_hyper) 
-    { 
-        C->p = temporary_p ;
     }
     
     GB_FREE_MEMORY (&p, p_size) ;

@@ -37,7 +37,8 @@
     const int64_t nvec  = C->nvec ;
     const int64_t cvlen = C->vlen ;
     const int64_t csize = C->type->size ;
-    #define P_PTR  ((int64_t *) (C)->p)
+    #else
+    #define P_PTR (p)
     #endif
 
     GB_Ai_DECLARE (Ai, const) ; GB_Ai_PTR (Ai, A) ;
@@ -66,9 +67,14 @@
         if (bknz == 0) continue ;
 
         // get C(:,jC), the (kC)th vector of C
-        int64_t pC     = GBp_C (Cp, kC, cvlen) ;
-        int64_t pC_end = GBp_C (Cp, kC+1, cvlen) ;
-
+        #ifdef GB_JIT_KERNEL
+        int64_t pC = ((int64_t*)C->p)[kC];
+        int64_t pC_end = ((int64_t*)C->p)[kC+1];
+        #else
+        int64_t pC     = P_PTR [kC] ;
+        int64_t pC_end = P_PTR [kC+1] ;
+        #endif
+        
         // get A(:,jA), the (kA)th vector of A
         int64_t jA = GBh_A (Ah, kA) ;
         int64_t pA_start = GBp_A (Ap, kA, avlen) ;
