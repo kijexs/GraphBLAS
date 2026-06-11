@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// GB_kroner_template: Kronecker product, C = kron (A,B)
+// GB_kroner_sel_template: Kronecker product, C = kron (A,B)
 //------------------------------------------------------------------------------
 
 // SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2025, All Rights Reserved.
@@ -30,12 +30,8 @@
     const int64_t bvlen = B->vlen ;
     const int64_t bnvec = B->nvec ;
 
-    GB_Cp_DECLARE (Cp,      ) ; GB_Cp_PTR (Cp, C) ;
-    GB_Ch_DECLARE (Ch,      ) ; GB_Ch_PTR (Ch, C) ;
-    GB_C_NVALS (cnz) ;
+    #define P_PTR              ((int64_t *) (C)->p)
     const int64_t cnvec = anvec * bnvec ;
-    const int64_t nvec  = C->nvec ;
-    const int64_t cvlen = C->vlen ;
     const int64_t csize = C->type->size ;
     #endif
 
@@ -63,15 +59,6 @@
         int64_t pB_end   = GBp_B (Bp, kB+1, bvlen) ;
         int64_t bknz     = pB_end - pB_start ;
         if (bknz == 0) continue ;
-
-        // get C(:,jC), the (kC)th vector of C
-        #ifdef GB_JIT_KERNEL
-        int64_t pC = ((int64_t*)C->p)[kC];
-        int64_t pC_end = ((int64_t*)C->p)[kC+1];
-        #else
-        int64_t pC     = P_PTR [kC] ;
-        int64_t pC_end = P_PTR [kC+1] ;
-        #endif
         
         // get A(:,jA), the (kA)th vector of A
         int64_t jA = GBh_A (Ah, kA) ;
@@ -106,7 +93,7 @@
                 GB_GETA (a, Ax, pA, false) ;
             }
 
-            for (int64_t pB = pB_start ; pB < pB_end && pC < pC_end ; pB++)
+            for (int64_t pB = pB_start ; pB < pB_end ; pB++)
             { 
                 //--------------------------------------------------------------
                 // b = B(iB,jB), typecasted to op->ytype
@@ -117,26 +104,15 @@
                 { 
                     GB_GETB (b, Bx, pB, false) ;
                 }
-                // C(iC,jC) = A(iA,jA) * B(iB,jB)
-                if (!GB_C_IS_FULL)
-                { 
-                    GB_ISET (Ci, pC, iAblock + iB) ;
-                }
-                if (!GB_C_ISO)
-                { 
-                    GB_KRONECKER_OP (Cx, pC, a, iA, jA, b, iB, jB) ;
-                    for (size_t i = 0 ; i < csize ; ++i)
-                    {
-                        if (*(Cx + (pC*csize + i)))
-                        {
-                            pC++ ;
-                            break ;
-                        }
+                GB_void cwork[GB_VLA(csize)] ;
+                GB_KRONECKER_OP (cwork, 0, a, iA, jA, b, iB, jB) ;
+                for (size_t i = 0; i < csize; ++i)
+                {
+                    if (*(cwork + i))
+                    { 
+                        P_PTR [kC]++ ;
+                        break ;
                     }
-                }
-                else
-                { 
-                    pC++ ;
                 }
             }
         }

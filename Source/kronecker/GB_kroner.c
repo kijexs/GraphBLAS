@@ -210,84 +210,83 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
     if (!C_iso && !op_is_positional)
     {
-        #pragma omp parallel for num_threads(nthreads) schedule(guided)
-        for (int64_t kC = 0; kC < cnvec; kC++)
+        struct GB_Matrix_opaque stub_header ;
+        GrB_Matrix C_stub = &stub_header ; 
+        C_stub->magic = GB_MAGIC ;
+        // map working arrays into the stub matrix
+        C_stub->type  = ctype ;
+        C_stub->iso = C_iso ;
+        C_stub->p = p ;
+        C_stub->nvec = 0 ;
+        // via the JIT kernel
+        info = GB_kroner_jit (C_stub, op, flipij, A, B, nthreads) ;
+
+        if (info == GrB_NO_VALUE)
         { 
-            int64_t kA = kC / bnvec ;
-            int64_t kB = kC % bnvec ;
+            // via the generic kernel
+            #define GB_A_TYPE GB_void
+            #define GB_B_TYPE GB_void
+            #define GB_C_TYPE GB_void
+            #define GB_A_ISO A_iso
+            #define GB_B_ISO B_iso
+            #define GB_C_ISO C_iso
+            #define P_PTR (p)
+            const bool A_iso = A->iso ;
+            const bool B_iso = B->iso ;
+            const int64_t asize = A->type->size ;
+            const int64_t bsize = B->type->size ;
 
-            // get A(:,jA), the (kA)th vector of A
-            int64_t jA       = GBh_A (Ah, kA) ;
-            int64_t pA_start = GBp_A (Ap, kA, avlen) ;
-            int64_t pA_end   = GBp_A (Ap, kA+1, avlen) ;
-            GB_void awork[GB_VLA(asize)] ;
-            if (!A_is_pattern && A_iso)
-            {
-                cast_A(awork, Ax, asize) ;
+            #define GB_DECLAREA(a) GB_void a [GB_VLA(asize)]
+            #define GB_DECLAREB(b) GB_void b [GB_VLA(bsize)]
+
+            #define GB_GETA(a,Ax,p,iso)                         \
+            {                                                   \
+                if (!A_is_pattern)                              \
+                {                                               \
+                    cast_A (a, Ax + (p)*asize, asize) ;         \
+                }                                               \
             }
 
-            // get B(:,jB), the (kB)th vector of B
-            int64_t jB       = GBh_B (Bh, kB) ;
-            int64_t pB_start = GBp_B (Bp, kB, bvlen) ;
-            int64_t pB_end   = GBp_B (Bp, kB+1, bvlen) ;
-            int64_t bknz     = pB_end - pB_start ;
-            if (bknz == 0) continue ;
-            GB_void bwork[GB_VLA(bsize)] ;
-            if (!B_is_pattern && B_iso)
-            {
-                cast_B(bwork, Bx, bsize) ;
+            #define GB_GETB(b,Bx,p,iso)                         \
+            {                                                   \
+                if (!B_is_pattern)                              \
+                {                                               \
+                    cast_B (b, Bx + (p)*bsize, bsize) ;         \
+                }                                               \
             }
 
-            //------------------------------------------------------------------
-            // for all entries in A(:,jA), skipping entries for first vector
-            //------------------------------------------------------------------
-
-            for (int64_t pA = pA_start ; pA < pA_end ; pA++)
-            { 
-                //--------------------------------------------------------------
-                // a = A(iA,jA), typecasted to op->xtype
-                //--------------------------------------------------------------
-
-                int64_t iA = GBi_A (Ai, pA, avlen) ;
-                int64_t iAblock = iA * bvlen ;
-                if (!A_iso)
-                { 
-                    cast_A(awork, Ax + (pA * asize), asize);
-                }
-
-                //--------------------------------------------------------------
-                // for all entries in B(:,jB), skipping entries for 1st vector
-                //--------------------------------------------------------------
-
-                for (int64_t pB = pB_start ; pB < pB_end ; pB++)
-                { 
-
-                    //----------------------------------------------------------
-                    // b = B(iB,jB), typecasted to op->ytype
-                    //----------------------------------------------------------
-
-                    int64_t iB = GBi_B (Bi, pB, bvlen) ;
-                    if (!B_iso)
-                    { 
-                        cast_B(bwork, Bx + (pB * bsize), bsize) ;
-                    }
-
-                    //----------------------------------------------------------
-                    // C(iC,jC) = A(iA,jA) * B(iB,jB)
-                    //----------------------------------------------------------
-
-                    GB_void cwork[GB_VLA(csize)] ;
-                    fmult(cwork, awork, bwork) ;
-                    for (size_t i = 0; i < csize; ++i)
-                    {
-                        if (*(cwork + i))
-                        {
-                            p [kC]++ ;
-                            break;
-                        }
-                    }
-                }
+            #define GB_KRONECKER_OP(Cx,pC,a,ix,jx,b,iy,jy)      \
+            {                                                   \
+                if (fmult != NULL)                              \
+                {                                               \
+                    /* standard binary operator */              \
+                    fmult (Cx +(pC)*csize, a, b) ;              \
+                }                                               \
+                else                                            \
+                {                                               \
+                    /* index binary operator */                 \
+                    if (flipij)                                 \
+                    {                                           \
+                        fmult_idx (Cx +(pC)*csize,              \
+                            a, jx, ix, b, jy, iy, theta) ;      \
+                    }                                           \
+                    else                                        \
+                    {                                           \
+                        fmult_idx (Cx +(pC)*csize,              \
+                            a, ix, jx, b, iy, jy, theta) ;      \
+                    }                                           \
+                }                                               \
             }
+
+            #define GB_GENERIC
+            #include "ewise/include/GB_ewise_shared_definitions.h"
+            #include "kronecker/template/GB_kroner_sel_template.c"
+        }
+        
+        if (info == GrB_SUCCESS) 
+        { 
+            p = (int64_t *) C_stub->p ;
+            info = GrB_NO_VALUE ;
         }
 
         GB_cumsum (p, false, cnvec, NULL, nthreads, Werk) ;
@@ -461,16 +460,14 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
     // temporarily use full-length p so the fill kernel can index
     // all vectors 0..cnvec-1
-    void *temporary_p = NULL ;
-    if (C_is_hyper)
-    { 
-        temporary_p = C->p ;
-        C->p = p ;
-    }
-
+    void *temporary_p = C->p ;
+    C->p = p ;
+    
     // via the JIT kernel
     info = GB_kroner_jit (C, op, flipij, A, B, nthreads) ;
 
+    C->p = temporary_p ;
+    
     if (info == GrB_NO_VALUE)
     { 
         // via the generic kernel
@@ -534,11 +531,6 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         #include "ewise/include/GB_ewise_shared_definitions.h"
         #include "kronecker/template/GB_kroner_template.c"
         info = GrB_SUCCESS ;
-    }
-
-    if (C_is_hyper) 
-    { 
-        C->p = temporary_p ;
     }
     
     GB_FREE_MEMORY (&p, p_size) ;
