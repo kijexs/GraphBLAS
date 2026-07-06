@@ -193,8 +193,6 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     int64_t *restrict p = GB_MALLOC_MEMORY (cnvec + 1, sizeof(int64_t), &(p_size)) ;
     ASSERT (p_size == GB_Global_memtable_size (p)) ;
     GB_memset (p, 0, p_size, nthreads) ;
-    bool p_is_32 = (ctype != GrB_INT64) ;
-    #define P_IS_32 p_is_32
 
     size_t h_size = 0, hp_size = 0 ;
     int64_t *restrict h = NULL ;
@@ -286,7 +284,6 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         if (info == GrB_SUCCESS) 
         { 
             p = (int64_t *) C_stub->p ;
-            info = GrB_NO_VALUE ;
         }
 
         GB_cumsum (p, false, cnvec, NULL, nthreads, Werk) ;
