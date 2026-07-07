@@ -6237,6 +6237,7 @@ GrB_Info GrB_Matrix_kronecker_BinaryOp  // C<M> = accum (C, kron(A,B))
     const GrB_Matrix M,             // optional mask for C, unused if NULL
     const GrB_BinaryOp accum,       // optional accum for Z=accum(C,T)
     const GrB_BinaryOp op,          // defines '*' for T=kron(A,B)
+    const GxB_unary_function sel,   // optional selector for C, unused if NULL
     const GrB_Matrix A,             // first input:  matrix A
     const GrB_Matrix B,             // second input: matrix B
     const GrB_Descriptor desc       // descriptor for C, M, A, and B
@@ -6248,6 +6249,7 @@ GrB_Info GrB_Matrix_kronecker_Monoid  // C<M> = accum (C, kron(A,B))
     const GrB_Matrix M,             // optional mask for C, unused if NULL
     const GrB_BinaryOp accum,       // optional accum for Z=accum(C,T)
     const GrB_Monoid monoid,        // defines '*' for T=kron(A,B)
+    const GxB_unary_function sel,   // optional selector for C, unused if NULL
     const GrB_Matrix A,             // first input:  matrix A
     const GrB_Matrix B,             // second input: matrix B
     const GrB_Descriptor desc       // descriptor for C, M, A, and B
@@ -6259,18 +6261,19 @@ GrB_Info GrB_Matrix_kronecker_Semiring  // C<M> = accum (C, kron(A,B))
     const GrB_Matrix M,             // optional mask for C, unused if NULL
     const GrB_BinaryOp accum,       // optional accum for Z=accum(C,T)
     const GrB_Semiring semiring,    // defines '*' for T=kron(A,B)
+    const GxB_unary_function sel,   // optional selector for C, unused if NULL
     const GrB_Matrix A,             // first input:  matrix A
     const GrB_Matrix B,             // second input: matrix B
     const GrB_Descriptor desc       // descriptor for C, M, A, and B
 ) ;
 
 #if GxB_STDC_VERSION >= 201112L
-#define GrB_kronecker(C,Mask,accum,op,A,B,desc)         \
+#define GrB_kronecker(C,Mask,accum,op,sel,A,B,desc)     \
     _Generic ((op),                                     \
         GrB_Semiring : GrB_Matrix_kronecker_Semiring,   \
         GrB_Monoid   : GrB_Matrix_kronecker_Monoid,     \
         GrB_BinaryOp : GrB_Matrix_kronecker_BinaryOp)   \
-    (C, Mask, accum, op, A, B, desc)
+    (C, Mask, accum, op, sel, A, B, desc)
 #endif
 
 //==============================================================================
@@ -8204,7 +8207,7 @@ GrB_Info GxB_Matrix_apply_BinaryOp2nd (GrB_Matrix, const GrB_Matrix,
 
 // GxB_kron: use GrB_Matrix_kronecker_BinaryOp instead (as-is)
 GrB_Info GxB_kron (GrB_Matrix, const GrB_Matrix, const GrB_BinaryOp,
-    const GrB_BinaryOp, const GrB_Matrix, const GrB_Matrix,
+    const GrB_BinaryOp, const GxB_unary_function, const GrB_Matrix, const GrB_Matrix,
     const GrB_Descriptor) ;
 
 // GxB_*_resize: use GrB_*_resize instead (as-is)

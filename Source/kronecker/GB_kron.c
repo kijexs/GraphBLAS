@@ -37,6 +37,7 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     const bool Mask_struct,         // if true, use the only structure of M
     const GrB_BinaryOp accum,       // optional accum for Z=accum(C,T)
     const GrB_BinaryOp op_in,       // defines '*' for kron(A,B)
+    const GxB_unary_function sel,   // optional selector for C, unused if NULL
     const GrB_Matrix A,             // input matrix
     bool A_transpose,               // if true, use A' instead of A
     const GrB_Matrix B,             // input matrix
@@ -151,7 +152,7 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     //--------------------------------------------------------------------------
 
     GB_CLEAR_MATRIX_HEADER (T, &T_header) ;
-    GB_OK (GB_kroner (T, T_is_csc, op, flipij,
+    GB_OK (GB_kroner (T, T_is_csc, op, sel, flipij,
         A_transpose ? AT : A, A_is_pattern,
         B_transpose ? BT : B, B_is_pattern, Werk)) ;
 

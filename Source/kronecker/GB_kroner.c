@@ -11,6 +11,13 @@
 // C is the ztype of the operator.  C is hypersparse if either A or B are
 // hypersparse, full if both A and B are full, or sparse otherwise.  C is never
 // constructed as bitmap.
+//
+// If sel is not NULL, it is a user-defined selector function that determines
+// whether a computed value C(iC,jC) should be kept in the result matrix.
+// The selector is called as sel(&result, &value), where result is a bool
+// that should be set to true if the value should be kept, false otherwise.
+// If sel is NULL, the default behavior is used: a value is kept if any of
+// its bytes is non-zero.
 
 #define GB_FREE_WORKSPACE       \
 {                               \
@@ -35,6 +42,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     GrB_Matrix C,                   // output matrix
     const bool C_is_csc,            // desired format of C
     const GrB_BinaryOp op,          // multiply operator
+    const GxB_unary_function sel,   // optional selector for C, unused if NULL
     const bool flipij,              // if true, i and j are flipped: z=(x,y,j,i)
     const GrB_Matrix A_in,          // input matrix
     bool A_is_pattern,              // true if values of A are not used
@@ -217,7 +225,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         C_stub->p = p ;
         C_stub->nvec = 0 ;
         // via the JIT kernel
-        info = GB_kroner_jit (C_stub, op, flipij, A, B, nthreads) ;
+        info = GB_kroner_jit (C_stub, op, sel, flipij, A, B, nthreads) ;
 
         if (info == GrB_NO_VALUE)
         { 
@@ -360,8 +368,8 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     if (cnz == 0)
     { 
         GB_FREE_MEMORY(&p, p_size) ;
-        if (h != NULL) GB_FREE_MEMORY(&h, h_size) ;
-        if (hp != NULL) GB_FREE_MEMORY(&hp, hp_size) ;
+        GB_FREE_MEMORY(&h, h_size) ;
+        GB_FREE_MEMORY(&hp, hp_size) ;
         GB_FREE_WORKSPACE ;
         return (GrB_SUCCESS) ;
     }
@@ -461,7 +469,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     C->p = p ;
     
     // via the JIT kernel
-    info = GB_kroner_jit (C, op, flipij, A, B, nthreads) ;
+    info = GB_kroner_jit (C, op, sel, flipij, A, B, nthreads) ;
 
     C->p = temporary_p ;
     
@@ -531,15 +539,8 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     }
     
     GB_FREE_MEMORY (&p, p_size) ;
-
-    if (h != NULL)
-    { 
-        GB_FREE_MEMORY (&h, h_size) ;
-    }
-    if (hp != NULL)
-    { 
-        GB_FREE_MEMORY (&hp, hp_size) ;
-    }
+    GB_FREE_MEMORY (&h, h_size) ;
+    GB_FREE_MEMORY (&hp, hp_size) ;
     
     //--------------------------------------------------------------------------
     // remove empty vectors from C, if hypersparse

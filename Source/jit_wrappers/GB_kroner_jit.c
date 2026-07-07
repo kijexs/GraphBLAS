@@ -18,6 +18,7 @@ GrB_Info GB_kroner_jit
     GrB_Matrix C,
     // input:
     const GrB_BinaryOp binaryop,
+    const GxB_unary_function selector,
     const bool flipij,
     const GrB_Matrix A,
     const GrB_Matrix B,
@@ -60,6 +61,6 @@ GrB_Info GB_kroner_jit
 
     #include "include/GB_pedantic_disable.h"
     GB_jit_dl_function GB_jit_kernel = (GB_jit_dl_function) dl_function ;
-    return (GB_jit_kernel (C, A, B, nthreads, binaryop->theta, &GB_callback)) ;
+    return (GB_jit_kernel (C, A, B, nthreads, binaryop->theta, selector, &GB_callback)) ;
 }
 

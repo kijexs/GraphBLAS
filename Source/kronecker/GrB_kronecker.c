@@ -20,6 +20,7 @@ GrB_Info GrB_Matrix_kronecker_BinaryOp  // C<M> = accum (C, kron(A,B))
     const GrB_Matrix Mask,          // optional mask for C, unused if NULL
     const GrB_BinaryOp accum,       // optional accum for Z=accum(C,T)
     const GrB_BinaryOp op,          // defines '*' for T=kron(A,B)
+    const GxB_unary_function sel,   // optional selector for C, unused if NULL
     const GrB_Matrix A,             // first input:  matrix A
     const GrB_Matrix B,             // second input: matrix B
     const GrB_Descriptor desc       // descriptor for C, M, A, and B
@@ -55,6 +56,7 @@ GrB_Info GrB_Matrix_kronecker_BinaryOp  // C<M> = accum (C, kron(A,B))
         M, Mask_comp, Mask_struct,  // mask matrix and its descriptor
         accum,                      // for accum (C,T)
         op,                         // operator that defines T=kron(A,B)
+        sel,                        // optional selector for C, unused if NULL
         A,          A_tran,         // A matrix and its descriptor
         B,          B_tran,         // B matrix and its descriptor
         Werk) ;
@@ -73,6 +75,7 @@ GrB_Info GrB_Matrix_kronecker_Monoid  // C<M> = accum (C, kron(A,B))
     const GrB_Matrix M,             // optional mask for C, unused if NULL
     const GrB_BinaryOp accum,       // optional accum for Z=accum(C,T)
     const GrB_Monoid monoid,        // defines '*' for T=kron(A,B)
+    const GxB_unary_function sel,   // optional selector for C, unused if NULL
     const GrB_Matrix A,             // first input:  matrix A
     const GrB_Matrix B,             // second input: matrix B
     const GrB_Descriptor desc       // descriptor for C, M, A, and B
@@ -80,7 +83,7 @@ GrB_Info GrB_Matrix_kronecker_Monoid  // C<M> = accum (C, kron(A,B))
 { 
     GB_RETURN_IF_NULL_OR_FAULTY (monoid) ;
     GrB_BinaryOp op = monoid->op ;
-    return (GrB_Matrix_kronecker_BinaryOp (C, M, accum, op, A, B, desc)) ;
+    return (GrB_Matrix_kronecker_BinaryOp (C, M, accum, op, sel, A, B, desc)) ;
 }
 
 //------------------------------------------------------------------------------
@@ -93,6 +96,7 @@ GrB_Info GrB_Matrix_kronecker_Semiring  // C<M> = accum (C, kron(A,B))
     const GrB_Matrix M,             // optional mask for C, unused if NULL
     const GrB_BinaryOp accum,       // optional accum for Z=accum(C,T)
     const GrB_Semiring semiring,    // defines '*' for T=kron(A,B)
+    const GxB_unary_function sel,   // optional selector for C, unused if NULL
     const GrB_Matrix A,             // first input:  matrix A
     const GrB_Matrix B,             // second input: matrix B
     const GrB_Descriptor desc       // descriptor for C, M, A, and B
@@ -100,7 +104,7 @@ GrB_Info GrB_Matrix_kronecker_Semiring  // C<M> = accum (C, kron(A,B))
 { 
     GB_RETURN_IF_NULL_OR_FAULTY (semiring) ;
     GrB_BinaryOp op = semiring->multiply ;
-    return (GrB_Matrix_kronecker_BinaryOp (C, M, accum, op, A, B, desc)) ;
+    return (GrB_Matrix_kronecker_BinaryOp (C, M, accum, op, sel, A, B, desc)) ;
 }
 
 //------------------------------------------------------------------------------
@@ -113,11 +117,12 @@ GrB_Info GxB_kron                   // C<M> = accum (C, kron(A,B))
     const GrB_Matrix M,             // optional mask for C, unused if NULL
     const GrB_BinaryOp accum,       // optional accum for Z=accum(C,T)
     const GrB_BinaryOp op,          // defines '*' for T=kron(A,B)
+    const GxB_unary_function sel,   // optional selector for C, unused if NULL
     const GrB_Matrix A,             // first input:  matrix A
     const GrB_Matrix B,             // second input: matrix B
     const GrB_Descriptor desc       // descriptor for C, M, A, and B
 )
 { 
-    return (GrB_Matrix_kronecker_BinaryOp (C, M, accum, op, A, B, desc)) ;
+    return (GrB_Matrix_kronecker_BinaryOp (C, M, accum, op, sel, A, B, desc)) ;
 }
 

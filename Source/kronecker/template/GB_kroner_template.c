@@ -32,7 +32,6 @@
 
     GB_Cp_DECLARE (Cp,      ) ; GB_Cp_PTR (Cp, C) ;
     GB_Ch_DECLARE (Ch,      ) ; GB_Ch_PTR (Ch, C) ;
-    GB_C_NVALS (cnz) ;
     const int64_t cnvec = anvec * bnvec ;
     const int64_t nvec  = C->nvec ;
     const int64_t cvlen = C->vlen ;
@@ -95,9 +94,9 @@
 
         for (int64_t pA = pA_start ; pA < pA_end ; pA++)
         { 
-            //--------------------------------------------------------------
+            //------------------------------------------------------------------
             // a = A(iA,jA), typecasted to op->xtype
-            //--------------------------------------------------------------
+            //------------------------------------------------------------------
 
             int64_t iA = GBi_A (Ai, pA, avlen) ;
             int64_t iAblock = iA * bvlen ;
@@ -125,12 +124,33 @@
                 if (!GB_C_ISO)
                 { 
                     GB_KRONECKER_OP (Cx, pC, a, iA, jA, b, iB, jB) ;
-                    for (size_t i = 0 ; i < csize ; ++i)
-                    {
-                        if (*(Cx + (pC*csize + i)))
-                        {
+
+                    //----------------------------------------------------------
+                    // check if C(iC,jC) should be kept in the result
+                    //----------------------------------------------------------
+
+                    if (sel != NULL)
+                    { 
+                        // user-defined selector: call the function
+                        // to check the value
+                        bool result = false ;
+                        sel (&result, Cx + pC * csize) ;
+                        
+                        if (result)
+                        { 
                             pC++ ;
-                            break ;
+                        }
+                    }
+                    else
+                    { 
+                        // default selector: byte-wise check for non-zero
+                        for (size_t i = 0 ; i < csize ; ++i)
+                        { 
+                        if (*(Cx + (pC * csize + i)))
+                            { 
+                                pC++ ;
+                                break ;
+                            }
                         }
                     }
                 }

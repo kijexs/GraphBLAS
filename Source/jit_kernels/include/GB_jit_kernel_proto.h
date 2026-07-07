@@ -730,6 +730,7 @@ GrB_Info GB_jit_kernel_kroner                                           \
     const GrB_Matrix B,                                                 \
     const int nthreads,                                                 \
     const void *theta,                                                  \
+    const GxB_unary_function sel,                                       \
     const GB_callback_struct *restrict my_callback                      \
 )
 

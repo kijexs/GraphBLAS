@@ -7,6 +7,9 @@
 
 //------------------------------------------------------------------------------
 
+// First pass of the Kronecker product: count the number of non-zero entries
+// in C.
+//
 // C = kron(A,B) where op determines the binary multiplier to use.  The type of
 // C is the ztype of the operator.  C is hypersparse if either A or B are
 // hypersparse, full if both A and B are full, or sparse otherwise.  C is never
@@ -44,7 +47,7 @@
           GB_C_TYPE *restrict Cx = (GB_C_TYPE *) C->x ;
 
     //--------------------------------------------------------------------------
-    // C = kron (A,B)
+    // C = kron (A,B): count non-zeros in C
     //--------------------------------------------------------------------------
 
     #pragma omp parallel for num_threads(nthreads) schedule(guided)
@@ -82,9 +85,9 @@
 
         for (int64_t pA = pA_start ; pA < pA_end ; pA++)
         { 
-            //--------------------------------------------------------------
+            //------------------------------------------------------------------
             // a = A(iA,jA), typecasted to op->xtype
-            //--------------------------------------------------------------
+            //------------------------------------------------------------------
 
             int64_t iA = GBi_A (Ai, pA, avlen) ;
             int64_t iAblock = iA * bvlen ;
@@ -104,14 +107,37 @@
                 { 
                     GB_GETB (b, Bx, pB, false) ;
                 }
+
+                // compute C(iC,jC) = A(iA,jA) * B(iB,jB) into a temporary buffer
                 GB_void cwork[GB_VLA(csize)] ;
                 GB_KRONECKER_OP (cwork, 0, a, iA, jA, b, iB, jB) ;
-                for (size_t i = 0; i < csize; ++i)
-                {
-                    if (*(cwork + i))
+                
+                //--------------------------------------------------------------
+                // check if C(iC,jC) should be counted as non-zero
+                //--------------------------------------------------------------
+                
+                if (sel != NULL)
+                { 
+                    // user-defined selector: call the function 
+                    // to check the value
+                    bool result = false ;
+                    sel (&result, cwork) ;
+                   
+                    if (result)
                     { 
                         P_PTR [kC]++ ;
-                        break ;
+                    }
+                }
+                else 
+                { 
+                    // default selector: byte-wise check for non-zero
+                    for (size_t i = 0; i < csize; ++i)
+                    { 
+                        if (*(cwork + i))
+                        { 
+                            P_PTR [kC]++ ;
+                            break ;
+                        }
                     }
                 }
             }
