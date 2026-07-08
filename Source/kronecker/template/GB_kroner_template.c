@@ -29,6 +29,7 @@
     GB_Bh_DECLARE (Bh, const) ; GB_Bh_PTR (Bh, B) ;
     const int64_t bvlen = B->vlen ;
     const int64_t bnvec = B->nvec ;
+    const int64_t bvdim = B->vdim ;
 
     GB_Cp_DECLARE (Cp,      ) ; GB_Cp_PTR (Cp, C) ;
     GB_Ch_DECLARE (Ch,      ) ; GB_Ch_PTR (Ch, C) ;
@@ -131,10 +132,13 @@
 
                     if (sel != NULL)
                     { 
+                        int64_t iC = iAblock + iB ;
+                        int64_t jC = jA * bvdim + jB ;
+                    
                         // user-defined selector: call the function
                         // to check the value
                         bool result = false ;
-                        sel (&result, Cx + pC * csize) ;
+                        sel (&result, Cx + pC * csize, iC, jC, y) ;
                         
                         if (result)
                         { 
@@ -143,15 +147,7 @@
                     }
                     else
                     { 
-                        // default selector: byte-wise check for non-zero
-                        for (size_t i = 0 ; i < csize ; ++i)
-                        { 
-                        if (*(Cx + (pC * csize + i)))
-                            { 
-                                pC++ ;
-                                break ;
-                            }
-                        }
+                        pC++ ;
                     }
                 }
                 else

@@ -16,8 +16,6 @@
 // whether a computed value C(iC,jC) should be kept in the result matrix.
 // The selector is called as sel(&result, &value), where result is a bool
 // that should be set to true if the value should be kept, false otherwise.
-// If sel is NULL, the default behavior is used: a value is kept if any of
-// its bytes is non-zero.
 
 #define GB_FREE_WORKSPACE       \
 {                               \
@@ -42,12 +40,13 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     GrB_Matrix C,                   // output matrix
     const bool C_is_csc,            // desired format of C
     const GrB_BinaryOp op,          // multiply operator
-    const GxB_unary_function sel,   // optional selector for C, unused if NULL
     const bool flipij,              // if true, i and j are flipped: z=(x,y,j,i)
     const GrB_Matrix A_in,          // input matrix
     bool A_is_pattern,              // true if values of A are not used
     const GrB_Matrix B_in,          // input matrix
     bool B_is_pattern,              // true if values of B are not used
+    const GrB_IndexUnaryOp select,  // optional selector for C, unused if NULL
+    const void *y,                  // third input: scalar y
     GB_Werk Werk
 )
 {
@@ -187,6 +186,12 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     }
 
     //--------------------------------------------------------------------------
+    // get selector
+    //--------------------------------------------------------------------------
+
+    GxB_index_unary_function sel = (select == NULL) ? NULL : select->idxunop_function ;
+
+    //--------------------------------------------------------------------------
     // count nonzero elements in result
     //--------------------------------------------------------------------------
 
@@ -214,7 +219,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     const GB_A_TYPE *restrict Ax = (GB_A_TYPE *) A->x ;
     const GB_B_TYPE *restrict Bx = (GB_B_TYPE *) B->x ;
 
-    if (!C_iso && !op_is_positional)
+    if (!C_iso)
     {
         struct GB_Matrix_opaque stub_header ;
         GrB_Matrix C_stub = &stub_header ; 
@@ -225,7 +230,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         C_stub->p = p ;
         C_stub->nvec = 0 ;
         // via the JIT kernel
-        info = GB_kroner_jit (C_stub, op, sel, flipij, A, B, nthreads) ;
+        info = GB_kroner_jit (C_stub, op, sel, y, flipij, A, B, nthreads) ;
 
         if (info == GrB_NO_VALUE)
         { 
@@ -327,7 +332,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         }
     }
 
-    else if (!C_is_full)
+    /*else if (!C_is_full)
     {
         h = GB_MALLOC_MEMORY (cnvec, sizeof(int64_t), &(h_size)) ;
         ASSERT (h_size == GB_Global_memtable_size (h)) ;
@@ -359,7 +364,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         GB_cumsum (p, false, cnvec, &(C->nvec_nonempty), nthreads, Werk) ;
         cnz = p[cnvec] ;
         if (C_is_hyper) nvec_nonempty = cnvec ;
-    }
+    }*/
 
     //--------------------------------------------------------------------------
     // quick return if C is empty
@@ -469,7 +474,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     C->p = p ;
     
     // via the JIT kernel
-    info = GB_kroner_jit (C, op, sel, flipij, A, B, nthreads) ;
+    info = GB_kroner_jit (C, op, sel, y, flipij, A, B, nthreads) ;
 
     C->p = temporary_p ;
     

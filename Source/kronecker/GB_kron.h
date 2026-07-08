@@ -20,11 +20,12 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     const bool Mask_struct,         // if true, use the only structure of M
     const GrB_BinaryOp accum,       // optional accum for Z=accum(C,T)
     const GrB_BinaryOp op,          // defines '*' for kron(A,B)
-    const GxB_unary_function sel,   // optional selector for C, unused if NULL
     const GrB_Matrix A,             // input matrix
     bool A_transpose,               // if true, use A' instead of A
     const GrB_Matrix B,             // input matrix
     bool B_transpose,               // if true, use B' instead of B
+    const GrB_IndexUnaryOp sel,     // optional selector for C, unused if NULL
+    const void *y,                  // third input: scalar y
     GB_Werk Werk
 ) ;
 
@@ -33,12 +34,13 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     GrB_Matrix C,                   // output matrix (static header)
     const bool C_is_csc,            // desired format of C
     const GrB_BinaryOp op,          // multiply operator
-    const GxB_unary_function sel,   // optional selector for C, unused if NULL
     const bool flipij,              // if true, i and j are flipped: z=(x,y,j,i)
     const GrB_Matrix A,             // input matrix
     bool A_is_pattern,              // true if values of A are not used
     const GrB_Matrix B,             // input matrix
     bool B_is_pattern,              // true if values of B are not used
+    const GrB_IndexUnaryOp sel,     // optional selector for C, unused if NULL
+    const void *y,                  // third input: scalar y
     GB_Werk Werk
 ) ;
 
