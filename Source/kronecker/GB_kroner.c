@@ -332,40 +332,6 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         }
     }
 
-    /*else if (!C_is_full)
-    {
-        h = GB_MALLOC_MEMORY (cnvec, sizeof(int64_t), &(h_size)) ;
-        ASSERT (h_size == GB_Global_memtable_size (h)) ;
-        #pragma omp parallel for num_threads(nthreads) schedule(guided)
-        for (kC = 0 ; kC < cnvec ; kC++)
-        {
-            const int64_t kA = kC / bnvec ;
-            const int64_t kB = kC % bnvec ;
-
-            // get A(:,jA), the (kA)th vector of A
-            const int64_t jA = GBh_A (Ah, kA) ;
-            const int64_t aknz = (Ap == NULL) ? avlen :
-                (GB_IGET (Ap, kA+1) - GB_IGET (Ap, kA)) ;
-            // get B(:,jB), the (kB)th vector of B
-            const int64_t jB = GBh_B (Bh, kB) ;
-            const int64_t bknz = (Bp == NULL) ? bvlen :
-                (GB_IGET (Bp, kB+1) - GB_IGET (Bp, kB)) ;
-            // determine # entries in C(:,jC), the (kC)th vector of C
-            // int64_t kC = kA * bnvec + kB ;
-
-            p [kC] = aknz * bknz ;
-
-            if (C_is_hyper)
-            { 
-                h [kC] = jA * bvdim + jB ;
-            }
-        }
-
-        GB_cumsum (p, false, cnvec, &(C->nvec_nonempty), nthreads, Werk) ;
-        cnz = p[cnvec] ;
-        if (C_is_hyper) nvec_nonempty = cnvec ;
-    }*/
-
     //--------------------------------------------------------------------------
     // quick return if C is empty
     //--------------------------------------------------------------------------

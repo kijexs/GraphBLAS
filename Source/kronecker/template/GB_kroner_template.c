@@ -34,8 +34,6 @@
     GB_Cp_DECLARE (Cp,      ) ; GB_Cp_PTR (Cp, C) ;
     GB_Ch_DECLARE (Ch,      ) ; GB_Ch_PTR (Ch, C) ;
     const int64_t cnvec = anvec * bnvec ;
-    const int64_t nvec  = C->nvec ;
-    const int64_t cvlen = C->vlen ;
     const int64_t csize = C->type->size ;
     #endif
 
