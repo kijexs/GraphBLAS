@@ -117,22 +117,15 @@
                 // check if C(iC,jC) should be counted as non-zero
                 //--------------------------------------------------------------
                 
-                if (sel != NULL)
-                { 
-                    int64_t iC = iAblock + iB ;
-                    int64_t jC = jA * bvdim + jB ;
+                int64_t iC = iAblock + iB ;
+                int64_t jC = jA * bvdim + jB ;
 
-                    // user-defined selector: call the function 
-                    // to check the value
-                    bool result = false ;
-                    sel (&result, cwork, iC, jC, y) ;
-                   
-                    if (result)
-                    { 
-                        P_PTR [kC]++ ;
-                    }
-                }
-                else 
+                // user-defined selector: call the function 
+                // to check the value
+                bool result = false ;
+                sel (&result, cwork, iC, jC, y) ;
+                
+                if (result)
                 { 
                     P_PTR [kC]++ ;
                 }

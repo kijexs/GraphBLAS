@@ -192,7 +192,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     GxB_index_unary_function sel = (select == NULL) ? NULL : select->idxunop_function ;
 
     //--------------------------------------------------------------------------
-    // count nonzero elements in result
+    // count non-zero elements in result if selector is non-zero
     //--------------------------------------------------------------------------
 
     bool C_is_full = GB_as_if_full (A) && GB_as_if_full (B) ;
@@ -219,7 +219,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     const GB_A_TYPE *restrict Ax = (GB_A_TYPE *) A->x ;
     const GB_B_TYPE *restrict Bx = (GB_B_TYPE *) B->x ;
 
-    if (!C_iso)
+    if (sel != NULL)
     {
         struct GB_Matrix_opaque stub_header ;
         GrB_Matrix C_stub = &stub_header ; 
@@ -330,6 +330,40 @@ GrB_Info GB_kroner                  // C = kron (A,B)
                 cnz = p[cnvec];
             }
         }
+    }
+
+    else if (!C_is_full)
+    {
+        h = GB_MALLOC_MEMORY (cnvec, sizeof(int64_t), &(h_size)) ;
+        ASSERT (h_size == GB_Global_memtable_size (h)) ;
+        #pragma omp parallel for num_threads(nthreads) schedule(guided)
+        for (kC = 0 ; kC < cnvec ; kC++)
+        {
+            const int64_t kA = kC / bnvec ;
+            const int64_t kB = kC % bnvec ;
+
+            // get A(:,jA), the (kA)th vector of A
+            const int64_t jA = GBh_A (Ah, kA) ;
+            const int64_t aknz = (Ap == NULL) ? avlen :
+                (GB_IGET (Ap, kA+1) - GB_IGET (Ap, kA)) ;
+            // get B(:,jB), the (kB)th vector of B
+            const int64_t jB = GBh_B (Bh, kB) ;
+            const int64_t bknz = (Bp == NULL) ? bvlen :
+                (GB_IGET (Bp, kB+1) - GB_IGET (Bp, kB)) ;
+            // determine # entries in C(:,jC), the (kC)th vector of C
+            // int64_t kC = kA * bnvec + kB ;
+
+            p [kC] = aknz * bknz ;
+
+            if (C_is_hyper)
+            { 
+                h [kC] = jA * bvdim + jB ;
+            }
+        }
+
+        GB_cumsum (p, false, cnvec, &(C->nvec_nonempty), nthreads, Werk) ;
+        cnz = p[cnvec] ;
+        if (C_is_hyper) nvec_nonempty = cnvec ;
     }
 
     //--------------------------------------------------------------------------

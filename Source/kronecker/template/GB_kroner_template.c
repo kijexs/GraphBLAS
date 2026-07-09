@@ -123,27 +123,30 @@
                 if (!GB_C_ISO)
                 { 
                     GB_KRONECKER_OP (Cx, pC, a, iA, jA, b, iB, jB) ;
-
-                    //----------------------------------------------------------
-                    // check if C(iC,jC) should be kept in the result
-                    //----------------------------------------------------------
-
-                    if (sel != NULL)
-                    { 
-                        int64_t iC = iAblock + iB ;
-                        int64_t jC = jA * bvdim + jB ;
+                }
                     
-                        // user-defined selector: call the function
-                        // to check the value
-                        bool result = false ;
-                        sel (&result, Cx + pC * csize, iC, jC, y) ;
-                        
-                        if (result)
-                        { 
-                            pC++ ;
-                        }
+                //----------------------------------------------------------
+                // check if C(iC,jC) should be kept in the result
+                //----------------------------------------------------------
+
+                if (sel != NULL)
+                { 
+                    int64_t iC = iAblock + iB ;
+                    int64_t jC = jA * bvdim + jB ;
+                
+                    // user-defined selector: call the function
+                    // to check the value
+                    bool result = false ;
+                    if (GB_C_ISO)
+                    { 
+                        sel (&result, Cx, iC, jC, y) ;
                     }
                     else
+                    { 
+                        sel (&result, Cx + pC * csize, iC, jC, y) ;
+                    }
+                    
+                    if (result)
                     { 
                         pC++ ;
                     }
