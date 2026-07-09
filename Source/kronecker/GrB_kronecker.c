@@ -163,6 +163,51 @@ GrB_Info GrB_Matrix_kronecker_BinaryOp_sel  // C<M> = accum (C, kron(A,B))
 }
 
 //------------------------------------------------------------------------------
+// GrB_Matrix_kronecker_Monoid_sel: Kronecker product with monoid
+//------------------------------------------------------------------------------
+
+GrB_Info GrB_Matrix_kronecker_Monoid_sel  // C<M> = accum (C, kron(A,B))
+(
+    GrB_Matrix C,                   // input/output matrix for results
+    const GrB_Matrix M,             // optional mask for C, unused if NULL
+    const GrB_BinaryOp accum,       // optional accum for Z=accum(C,T)
+    const GrB_Monoid monoid,        // defines '*' for T=kron(A,B)
+    const GrB_Matrix A,             // first input:  matrix A
+    const GrB_Matrix B,             // second input: matrix B
+    const GrB_Descriptor desc,      // descriptor for C, M, A, and B
+    const GrB_IndexUnaryOp sel,     // optional selector for C, unused if NULL
+    const void *y                   // third input: scalar y
+)
+{ 
+    GB_RETURN_IF_NULL_OR_FAULTY (monoid) ;
+    GrB_BinaryOp op = monoid->op ;
+    return (GrB_Matrix_kronecker_BinaryOp_sel (C, M, accum, op, A, B, desc, sel, y)) ;
+}
+
+//------------------------------------------------------------------------------
+// GrB_Matrix_kronecker_Semiring: Kronecker product with semiring
+//------------------------------------------------------------------------------
+
+GrB_Info GrB_Matrix_kronecker_Semiring_sel  // C<M> = accum (C, kron(A,B))
+(
+    GrB_Matrix C,                   // input/output matrix for results
+    const GrB_Matrix M,             // optional mask for C, unused if NULL
+    const GrB_BinaryOp accum,       // optional accum for Z=accum(C,T)
+    const GrB_Semiring semiring,    // defines '*' for T=kron(A,B)
+    const GrB_Matrix A,             // first input:  matrix A
+    const GrB_Matrix B,             // second input: matrix B
+    const GrB_Descriptor desc,      // descriptor for C, M, A, and B
+    const GrB_IndexUnaryOp sel,     // optional selector for C, unused if NULL
+    const void *y                   // third input: scalar y
+)
+{ 
+    GB_RETURN_IF_NULL_OR_FAULTY (semiring) ;
+    GrB_BinaryOp op = semiring->multiply ;
+    return (GrB_Matrix_kronecker_BinaryOp_sel (C, M, accum, op, A, B, desc, sel, y)) ;
+}
+
+
+//------------------------------------------------------------------------------
 // GxB_kron: Kronecker product (historical)
 //------------------------------------------------------------------------------
 
