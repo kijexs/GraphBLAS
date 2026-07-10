@@ -361,7 +361,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
             }
         }
 
-        GB_cumsum (p, false, cnvec, &(C->nvec_nonempty), nthreads, Werk) ;
+        GB_cumsum (p, false, cnvec, &nvec_nonempty, nthreads, Werk) ;
         cnz = p[cnvec] ;
         if (C_is_hyper) nvec_nonempty = cnvec ;
     }
@@ -418,7 +418,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
     if (!C_is_full)
     { 
-        if (C_is_hyper)
+        if (C_is_hyper && sel != NULL)
         { 
             C->nvec = nvec_nonempty ;
             GB_nvec_nonempty_set (C, nvec_nonempty) ;
