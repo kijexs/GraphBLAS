@@ -291,7 +291,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
             #define GB_GENERIC
             #include "ewise/include/GB_ewise_shared_definitions.h"
-            #include "kronecker/template/GB_kroner_sel_template.c"
+            #include "kronecker/template/GB_kroner_count_sel_template.c"
         }
         
         if (info == GrB_SUCCESS) 
@@ -332,53 +332,6 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         }
     }
 
-    else if (!C_is_full)
-    {
-        h = GB_MALLOC_MEMORY (cnvec, sizeof(int64_t), &(h_size)) ;
-        ASSERT (h_size == GB_Global_memtable_size (h)) ;
-        #pragma omp parallel for num_threads(nthreads) schedule(guided)
-        for (kC = 0 ; kC < cnvec ; kC++)
-        {
-            const int64_t kA = kC / bnvec ;
-            const int64_t kB = kC % bnvec ;
-
-            // get A(:,jA), the (kA)th vector of A
-            const int64_t jA = GBh_A (Ah, kA) ;
-            const int64_t aknz = (Ap == NULL) ? avlen :
-                (GB_IGET (Ap, kA+1) - GB_IGET (Ap, kA)) ;
-            // get B(:,jB), the (kB)th vector of B
-            const int64_t jB = GBh_B (Bh, kB) ;
-            const int64_t bknz = (Bp == NULL) ? bvlen :
-                (GB_IGET (Bp, kB+1) - GB_IGET (Bp, kB)) ;
-            // determine # entries in C(:,jC), the (kC)th vector of C
-            // int64_t kC = kA * bnvec + kB ;
-
-            p [kC] = aknz * bknz ;
-
-            if (C_is_hyper)
-            { 
-                h [kC] = jA * bvdim + jB ;
-            }
-        }
-
-        GB_cumsum (p, false, cnvec, &nvec_nonempty, nthreads, Werk) ;
-        cnz = p[cnvec] ;
-        if (C_is_hyper) nvec_nonempty = cnvec ;
-    }
-
-    //--------------------------------------------------------------------------
-    // quick return if C is empty
-    //--------------------------------------------------------------------------
-
-    if (cnz == 0)
-    { 
-        GB_FREE_MEMORY(&p, p_size) ;
-        GB_FREE_MEMORY(&h, h_size) ;
-        GB_FREE_MEMORY(&hp, hp_size) ;
-        GB_FREE_WORKSPACE ;
-        return (GrB_SUCCESS) ;
-    }
-
     //--------------------------------------------------------------------------
     // allocate the output matrix C
     //--------------------------------------------------------------------------
@@ -392,20 +345,29 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     GB_determine_pji_is_32 (&Cp_is_32, &Cj_is_32, &Ci_is_32,
         C_sparsity, cnz, (int64_t) cvlen, (int64_t) cvdim, Werk) ;
 
-    // C_is_hyper special case: allocate only nvec_nonempty vectors
-    if (C_is_hyper)
-    { 
+    if (sel == NULL)
+    {
         GB_OK (GB_new_bix (&C, // full, sparse, or hyper; existing header
         ctype, (int64_t) cvlen, (int64_t) cvdim, GB_ph_malloc, C_is_csc,
-        C_sparsity, true, B->hyper_switch, nvec_nonempty, cnz, true, C_iso,
+        C_sparsity, true, B->hyper_switch, cnvec, cnzmax, true, C_iso,
         Cp_is_32, Cj_is_32, Ci_is_32)) ;
     }
     else
-    { 
-        GB_OK (GB_new_bix (&C, // full, sparse, or hyper; existing header
-        ctype, (int64_t) cvlen, (int64_t) cvdim, GB_ph_malloc, C_is_csc,
-        C_sparsity, true, B->hyper_switch, cnvec, cnz, true, C_iso,
-        Cp_is_32, Cj_is_32, Ci_is_32)) ;
+    { // C_is_hyper special case: allocate only nvec_nonempty vectors
+        if (C_is_hyper)
+        { 
+            GB_OK (GB_new_bix (&C, // full, sparse, or hyper; existing header
+            ctype, (int64_t) cvlen, (int64_t) cvdim, GB_ph_malloc, C_is_csc,
+            C_sparsity, true, B->hyper_switch, nvec_nonempty, cnz, true, C_iso,
+            Cp_is_32, Cj_is_32, Ci_is_32)) ;
+        }
+        else
+        { 
+            GB_OK (GB_new_bix (&C, // full, sparse, or hyper; existing header
+            ctype, (int64_t) cvlen, (int64_t) cvdim, GB_ph_malloc, C_is_csc,
+            C_sparsity, true, B->hyper_switch, cnvec, cnz, true, C_iso,
+            Cp_is_32, Cj_is_32, Ci_is_32)) ;
+        }
     }
 
     //--------------------------------------------------------------------------
@@ -418,33 +380,71 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
     if (!C_is_full)
     { 
-        if (C_is_hyper && sel != NULL)
+        if (sel != NULL)
         { 
-            C->nvec = nvec_nonempty ;
-            GB_nvec_nonempty_set (C, nvec_nonempty) ;
-
-            for (int64_t i = 0; i < nvec_nonempty; i++) 
+            if (C_is_hyper)
             { 
-                GB_ISET (Ch, i, h[i]) ; 
-            }
-            GB_FREE_MEMORY (&h, h_size) ;
+                C->nvec = nvec_nonempty ;
+                GB_nvec_nonempty_set (C, nvec_nonempty) ;
 
-            for (int64_t i = 0; i <= nvec_nonempty; i++) 
-            { 
-                GB_ISET (Cp, i, hp[i]) ;
+                for (int64_t i = 0; i < nvec_nonempty; i++) 
+                { 
+                    GB_ISET (Ch, i, h[i]) ; 
+                }
+                GB_FREE_MEMORY (&h, h_size) ;
+
+                for (int64_t i = 0; i <= nvec_nonempty; i++) 
+                { 
+                    GB_ISET (Cp, i, hp[i]) ;
+                }
+                C->nvals = GB_IGET (Cp, nvec_nonempty) ;
+                GB_FREE_MEMORY (&hp, hp_size) ;
             }
-            C->nvals = GB_IGET (Cp, nvec_nonempty) ;
-            GB_FREE_MEMORY (&hp, hp_size) ;
+            else
+            { 
+                for (int64_t i = 0; i <= cnvec; i++) 
+                { 
+                    GB_ISET (Cp, i, p[i]) ;
+                }
+                C->nvals = GB_IGET (Cp, cnvec) ;
+            }
         }
         else
         { 
-            for (int64_t i = 0; i <= cnvec; i++) 
-            { 
-                GB_ISET (Cp, i, p[i]) ;
+            // C is sparse or hypersparse
+            int64_t kC ;
+            #pragma omp parallel for num_threads(nthreads) schedule(static)
+            for (kC = 0 ; kC < cnvec ; kC++)
+            {
+                const int64_t kA = kC / bnvec ;
+                const int64_t kB = kC % bnvec ;
+                // get A(:,jA), the (kA)th vector of A
+                const int64_t jA = GBh_A (Ah, kA) ;
+                const int64_t aknz = (Ap == NULL) ? avlen :
+                    (GB_IGET (Ap, kA+1) - GB_IGET (Ap, kA)) ;
+                // get B(:,jB), the (kB)th vector of B
+                const int64_t jB = GBh_B (Bh, kB) ;
+                const int64_t bknz = (Bp == NULL) ? bvlen :
+                    (GB_IGET (Bp, kB+1) - GB_IGET (Bp, kB)) ;
+                // determine # entries in C(:,jC), the (kC)th vector of C
+                // int64_t kC = kA * bnvec + kB ;
+                // Cp [kC] = aknz * bknz ;
+                GB_ISET (Cp, kC, aknz * bknz) ;
+                if (C_is_hyper)
+                { 
+                    // Ch [kC] = jA * bvdim + jB ;
+                    GB_ISET (Ch, kC, jA * bvdim + jB) ;
+                }
             }
+
+            int64_t nvec_nonempty ;
+            GB_cumsum (Cp, Cp_is_32, cnvec, &nvec_nonempty, nthreads, Werk) ;
+            GB_nvec_nonempty_set (C, nvec_nonempty) ;
             C->nvals = GB_IGET (Cp, cnvec) ;
+            if (C_is_hyper) C->nvec = cnvec ;
         }
     }
+    
     C->magic = GB_MAGIC ;
 
     //--------------------------------------------------------------------------
@@ -465,13 +465,30 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     }
 
     //--------------------------------------------------------------------------
+    // quick return if C is empty
+    //--------------------------------------------------------------------------
+
+    cnz = GB_nnz (C) ;
+    if (cnz == 0)
+    { 
+        GB_FREE_MEMORY(&p, p_size) ;
+        GB_FREE_MEMORY(&h, h_size) ;
+        GB_FREE_MEMORY(&hp, hp_size) ;
+        GB_FREE_WORKSPACE ;
+        return (GrB_SUCCESS) ;
+    }
+
+    //--------------------------------------------------------------------------
     // C = kron (A,B)
     //--------------------------------------------------------------------------
 
     // temporarily use full-length p so the fill kernel can index
     // all vectors 0..cnvec-1
     void *temporary_p = C->p ;
-    C->p = p ;
+    if (sel != NULL)
+    {
+        C->p = p ;
+    }
     
     // via the JIT kernel
     info = GB_kroner_jit (C, op, sel, y, flipij, A, B, nthreads) ;
@@ -539,7 +556,15 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
         #define GB_GENERIC
         #include "ewise/include/GB_ewise_shared_definitions.h"
-        #include "kronecker/template/GB_kroner_template.c"
+        if (sel != NULL)
+        { 
+            #include "kronecker/template/GB_kroner_sel_template.c"
+        }
+        else
+        { 
+            #include "kronecker/template/GB_kroner_template.c"
+        }
+        
         info = GrB_SUCCESS ;
     }
     

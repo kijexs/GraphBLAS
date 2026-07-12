@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// GB_kroner_template: Kronecker product, C = kron (A,B)
+// GB_kroner_sel_template: Kronecker product, C = kron (A,B)
 //------------------------------------------------------------------------------
 
 // SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2025, All Rights Reserved.
@@ -7,6 +7,9 @@
 
 //------------------------------------------------------------------------------
 
+// First pass of the Kronecker product: count the number of non-zero entries
+// in C.
+//
 // C = kron(A,B) where op determines the binary multiplier to use.  The type of
 // C is the ztype of the operator.  C is hypersparse if either A or B are
 // hypersparse, full if both A and B are full, or sparse otherwise.  C is never
@@ -31,8 +34,7 @@
     const int64_t bnvec = B->nvec ;
     const int64_t bvdim = B->vdim ;
 
-    GB_Cp_DECLARE (Cp,      ) ; GB_Cp_PTR (Cp, C) ;
-    GB_Ch_DECLARE (Ch,      ) ; GB_Ch_PTR (Ch, C) ;
+    #define P_PTR              ((int64_t *) (C)->p)
     const int64_t cnvec = anvec * bnvec ;
     const int64_t csize = C->type->size ;
     #endif
@@ -46,7 +48,7 @@
           GB_C_TYPE *restrict Cx = (GB_C_TYPE *) C->x ;
 
     //--------------------------------------------------------------------------
-    // C = kron (A,B)
+    // C = kron (A,B): count non-zeros in C
     //--------------------------------------------------------------------------
 
     #pragma omp parallel for num_threads(nthreads) schedule(guided)
@@ -61,15 +63,6 @@
         int64_t pB_end   = GBp_B (Bp, kB+1, bvlen) ;
         int64_t bknz     = pB_end - pB_start ;
         if (bknz == 0) continue ;
-
-        // get C(:,jC), the (kC)th vector of C
-        #ifdef GB_JIT_KERNEL
-        int64_t pC = ((int64_t*)C->p)[kC];
-        int64_t pC_end = ((int64_t*)C->p)[kC+1];
-        #else
-        int64_t pC     = P_PTR [kC] ;
-        int64_t pC_end = P_PTR [kC+1] ;
-        #endif
         
         // get A(:,jA), the (kA)th vector of A
         int64_t jA = GBh_A (Ah, kA) ;
@@ -104,7 +97,7 @@
                 GB_GETA (a, Ax, pA, false) ;
             }
 
-            for (int64_t pB = pB_start ; pB < pB_end && pC < pC_end ; pB++)
+            for (int64_t pB = pB_start ; pB < pB_end ; pB++)
             { 
                 //--------------------------------------------------------------
                 // b = B(iB,jB), typecasted to op->ytype
@@ -115,45 +108,26 @@
                 { 
                     GB_GETB (b, Bx, pB, false) ;
                 }
-                // C(iC,jC) = A(iA,jA) * B(iB,jB)
-                if (!GB_C_IS_FULL)
-                { 
-                    GB_ISET (Ci, pC, iAblock + iB) ;
-                }
-                if (!GB_C_ISO)
-                { 
-                    GB_KRONECKER_OP (Cx, pC, a, iA, jA, b, iB, jB) ;
-                }
-                    
-                //----------------------------------------------------------
-                // check if C(iC,jC) should be kept in the result
-                //----------------------------------------------------------
 
-                if (sel != NULL)
-                { 
-                    int64_t iC = iAblock + iB ;
-                    int64_t jC = jA * bvdim + jB ;
+                // compute C(iC,jC) = A(iA,jA) * B(iB,jB) into a temporary buffer
+                GB_void cwork[GB_VLA(csize)] ;
+                GB_KRONECKER_OP (cwork, 0, a, iA, jA, b, iB, jB) ;
                 
-                    // user-defined selector: call the function
-                    // to check the value
-                    bool result = false ;
-                    if (GB_C_ISO)
-                    { 
-                        sel (&result, Cx, iC, jC, y) ;
-                    }
-                    else
-                    { 
-                        sel (&result, Cx + pC * csize, iC, jC, y) ;
-                    }
-                    
-                    if (result)
-                    { 
-                        pC++ ;
-                    }
-                }
-                else
+                //--------------------------------------------------------------
+                // check if C(iC,jC) should be counted as non-zero
+                //--------------------------------------------------------------
+                
+                int64_t iC = iAblock + iB ;
+                int64_t jC = jA * bvdim + jB ;
+
+                // user-defined selector: call the function 
+                // to check the value
+                bool result = false ;
+                sel (&result, cwork, iC, jC, y) ;
+                
+                if (result)
                 { 
-                    pC++ ;
+                    P_PTR [kC]++ ;
                 }
             }
         }

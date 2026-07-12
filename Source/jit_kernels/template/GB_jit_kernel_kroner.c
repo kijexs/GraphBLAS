@@ -14,12 +14,19 @@ GB_JIT_GLOBAL GB_JIT_KERNEL_KRONER_PROTO (GB_jit_kernel)
 {
     GB_GET_CALLBACKS ;
     if (C->nvec == 0)
-    {
-        #include "template/GB_kroner_sel_template.c"
+    { 
+        #include "template/GB_kroner_count_sel_template.c"
     }
     else 
-    {
-        #include "template/GB_kroner_template.c"
+    { 
+        if (sel != NULL)
+        { 
+            #include "template/GB_kroner_sel_template.c"
+        }
+        else
+        { 
+            #include "template/GB_kroner_template.c"
+        }
     }
     return (GrB_SUCCESS) ;
 }
