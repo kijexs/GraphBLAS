@@ -134,39 +134,6 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     int nthreads = GB_nthreads (work, chunk, nthreads_max) ;
 
     //--------------------------------------------------------------------------
-    // check if C is iso and compute its iso value if it is
-    //--------------------------------------------------------------------------
-
-    GrB_Type ctype = op->ztype ;
-    const size_t csize = ctype->size ;
-    GB_void cscalar [GB_VLA(csize)] ;
-    bool C_iso = GB_emult_iso (cscalar, ctype, A, B, op) ;
-
-    //--------------------------------------------------------------------------
-    // compute info of the output matrix C
-    //--------------------------------------------------------------------------
-
-    // C has the same type as z for the multiply operator, z=op(x,y)
-
-    uint64_t cvlen, cvdim, cnzmax, cnvec ;
-    bool ok = GB_int64_multiply (&cvlen, avlen, bvlen) ;
-    ok = ok & GB_int64_multiply (&cvdim, avdim, bvdim) ;
-    ok = ok & GB_int64_multiply (&cnzmax, anz, bnz) ;
-    ok = ok & GB_int64_multiply (&cnvec, anvec, bnvec) ;
-    ASSERT (ok) ;
-
-    if (C_iso)
-    { 
-        // the values of A and B are no longer needed if C is iso
-        GBURBLE ("(iso kron) ") ;
-        A_is_pattern = true ;
-        B_is_pattern = true ;
-    }
-
-    // C is hypersparse if either A or B are hypersparse.  It is never bitmap.
-    bool C_is_hyper = (cvdim > 1) && (Ah != NULL || Bh != NULL) ;
-
-    //--------------------------------------------------------------------------
     // get operator
     //--------------------------------------------------------------------------
 
@@ -190,6 +157,35 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     //--------------------------------------------------------------------------
 
     GxB_index_unary_function sel = (select == NULL) ? NULL : select->idxunop_function ;
+    GB_Opcode opcode_sel = (select == NULL) ? GB_NOP_code : select->opcode ;
+    // positional ops or user-defined idxunops never result in an iso matrix
+    bool sel_is_positional = (select != NULL) &&
+        (GB_OPCODE_IS_POSITIONAL(opcode_sel) || (opcode_sel == GB_USER_idxunop_code)) ;
+
+    //--------------------------------------------------------------------------
+    // check if C is iso and compute its iso value if it is
+    //--------------------------------------------------------------------------
+
+    GrB_Type ctype = op->ztype ;
+    const size_t csize = ctype->size ;
+    GB_void cscalar [GB_VLA(csize)] ;
+    bool C_iso = GB_emult_iso (cscalar, ctype, A, B, op) ;
+
+    //--------------------------------------------------------------------------
+    // compute info of the output matrix C
+    //--------------------------------------------------------------------------
+
+    // C has the same type as z for the multiply operator, z=op(x,y)
+
+    uint64_t cvlen, cvdim, cnzmax, cnvec ;
+    bool ok = GB_int64_multiply (&cvlen, avlen, bvlen) ;
+    ok = ok & GB_int64_multiply (&cvdim, avdim, bvdim) ;
+    ok = ok & GB_int64_multiply (&cnzmax, anz, bnz) ;
+    ok = ok & GB_int64_multiply (&cnvec, anvec, bnvec) ;
+    ASSERT (ok) ;
+
+    // C is hypersparse if either A or B are hypersparse.  It is never bitmap.
+    bool C_is_hyper = (cvdim > 1) && (Ah != NULL || Bh != NULL) ;
 
     //--------------------------------------------------------------------------
     // count non-zero elements in result if selector is non-zero
@@ -219,8 +215,8 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     const GB_A_TYPE *restrict Ax = (GB_A_TYPE *) A->x ;
     const GB_B_TYPE *restrict Bx = (GB_B_TYPE *) B->x ;
 
-    if (sel != NULL)
-    {
+    if (sel != NULL && (!C_iso || sel_is_positional))
+    { 
         struct GB_Matrix_opaque stub_header ;
         GrB_Matrix C_stub = &stub_header ; 
         C_stub->magic = GB_MAGIC ;
@@ -333,6 +329,21 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     }
 
     //--------------------------------------------------------------------------
+    // update C_iso based on the selector
+    //--------------------------------------------------------------------------
+    
+    // if the selector is positional, it may have altered the values, so C 
+    // can no longer be guaranteed to be iso
+    C_iso = C_iso && !sel_is_positional ;
+    if (C_iso)
+    { 
+        // the values of A and B are no longer needed if C is iso
+        GBURBLE ("(iso kron) ") ;
+        A_is_pattern = true ;
+        B_is_pattern = true ;
+    }
+
+    //--------------------------------------------------------------------------
     // allocate the output matrix C
     //--------------------------------------------------------------------------
 
@@ -367,6 +378,23 @@ GrB_Info GB_kroner                  // C = kron (A,B)
             ctype, (int64_t) cvlen, (int64_t) cvdim, GB_ph_malloc, C_is_csc,
             C_sparsity, true, B->hyper_switch, cnvec, cnz, true, C_iso,
             Cp_is_32, Cj_is_32, Ci_is_32)) ;
+        }
+    }
+
+    //--------------------------------------------------------------------------
+    // C = kron (A,B) where C is iso and/or full
+    //--------------------------------------------------------------------------
+
+    if (C_iso)
+    { 
+        // C->x [0] = cscalar = op (A,B)
+        memcpy (C->x, cscalar, csize) ;
+        if (C_is_full)
+        { 
+            // no more work to do if C is iso and full
+            ASSERT_MATRIX_OK (C, "C=kron(A,B), iso full", GB0) ;
+            GB_FREE_WORKSPACE ;
+            return (GrB_SUCCESS) ;
         }
     }
 

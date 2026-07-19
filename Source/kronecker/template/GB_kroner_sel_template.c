@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// GB_kroner_template: Kronecker product, C = kron (A,B)
+// GB_kroner_sel_template: Kronecker product, C = kron (A,B)
 //------------------------------------------------------------------------------
 
 // SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2025, All Rights Reserved.

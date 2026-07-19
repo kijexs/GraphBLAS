@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// GB_kroner_sel_template: Kronecker product, C = kron (A,B)
+// GB_kroner_count_sel_template: Kronecker product, C = kron (A,B)
 //------------------------------------------------------------------------------
 
 // SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2025, All Rights Reserved.
@@ -83,6 +83,14 @@
         { 
             GB_GETB (b, Bx, 0, true) ;
         }
+        GB_void cwork [GB_VLA(csize)] ;
+        if (GB_C_ISO)
+        { 
+            // C is iso, so the Kronecker product result is invariant,
+            // compute it once
+            // the positional selector will still be evaluated per-element below
+            GB_KRONECKER_OP (cwork, 0, a, 0, 0, b, 0, 0) ;
+        }
 
         for (int64_t pA = pA_start ; pA < pA_end ; pA++)
         { 
@@ -110,8 +118,10 @@
                 }
 
                 // compute C(iC,jC) = A(iA,jA) * B(iB,jB) into a temporary buffer
-                GB_void cwork[GB_VLA(csize)] ;
-                GB_KRONECKER_OP (cwork, 0, a, iA, jA, b, iB, jB) ;
+                if (!GB_C_ISO)
+                { 
+                    GB_KRONECKER_OP (cwork, 0, a, iA, jA, b, iB, jB) ;
+                }
                 
                 //--------------------------------------------------------------
                 // check if C(iC,jC) should be counted as non-zero
