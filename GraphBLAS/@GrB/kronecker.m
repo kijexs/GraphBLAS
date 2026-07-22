@@ -1,10 +1,11 @@
-function C = kronecker (arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+function C = kronecker (arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
 %GRB.KRONECKER sparse Kronecker product.
 %
 %   C = GrB.kronecker (op, A, B, desc)
 %   C = GrB.kronecker (Cin, accum, op, A, B, desc)
 %   C = GrB.kronecker (Cin, M, op, A, B, desc)
 %   C = GrB.kronecker (Cin, M, accum, op, A, B, desc)
+%   C = GrB.kronecker (Cin, M, accum, op, A, B, desc, sel, y)
 %
 % GrB.kronecker computes the Kronecker product, T=kron(A,B), using the
 % given binary operator op, in place of the conventional '*' operator for
@@ -42,6 +43,14 @@ if (nargin > 5 && isobject (arg6))
     arg6 = arg6.opaque ;
 end
 
+if (nargin > 6 && isobject (arg7))
+    arg7 = arg7.opaque ;
+end
+
+if (nargin > 7 && isobject (arg8))
+    arg8 = arg8.opaque ;
+end
+
 switch (nargin)
     case 3
         [C, k] = gbkronecker (arg1, arg2, arg3) ;
@@ -53,6 +62,10 @@ switch (nargin)
         [C, k] = gbkronecker (arg1, arg2, arg3, arg4, arg5, arg6) ;
     case 7
         [C, k] = gbkronecker (arg1, arg2, arg3, arg4, arg5, arg6, arg7) ;
+    case 8
+        [C, k] = gbkronecker (arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) ;
+    case 9
+        [C, k] = gbkronecker (arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) ;
 end
 
 if (k == 0)
