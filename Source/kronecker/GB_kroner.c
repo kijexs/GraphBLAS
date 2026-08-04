@@ -393,6 +393,9 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         { 
             // no more work to do if C is iso and full
             ASSERT_MATRIX_OK (C, "C=kron(A,B), iso full", GB0) ;
+            GB_FREE_MEMORY (&p, p_size) ;
+            GB_FREE_MEMORY (&h, h_size) ;
+            GB_FREE_MEMORY (&hp, hp_size) ;
             GB_FREE_WORKSPACE ;
             return (GrB_SUCCESS) ;
         }
@@ -474,23 +477,6 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     }
     
     C->magic = GB_MAGIC ;
-
-    //--------------------------------------------------------------------------
-    // C = kron (A,B) where C is iso and/or full full
-    //--------------------------------------------------------------------------
-
-    if (C_iso)
-    { 
-        // C->x [0] = cscalar = op (A,B)
-        memcpy (C->x, cscalar, csize) ;
-        if (C_is_full)
-        { 
-            // no more work to do if C is iso and full
-            ASSERT_MATRIX_OK (C, "C=kron(A,B), iso full", GB0) ;
-            GB_FREE_WORKSPACE ;
-            return (GrB_SUCCESS) ;
-        }
-    }
 
     //--------------------------------------------------------------------------
     // quick return if C is empty
