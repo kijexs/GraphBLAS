@@ -27,6 +27,7 @@
 #include "mxm/GB_mxm.h"
 #include "transpose/GB_transpose.h"
 #include "mask/GB_accum_mask.h"
+#include "scalar/GB_Scalar_wrap.h"
 
 GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
 (
@@ -41,8 +42,8 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     bool A_transpose,               // if true, use A' instead of A
     const GrB_Matrix B,             // input matrix
     bool B_transpose,               // if true, use B' instead of B
-    const GrB_IndexUnaryOp sel,     // optional selector for C, unused if NULL
-    const void *y,                  // third input: scalar y
+    const GrB_IndexUnaryOp sel_in,  // optional selector for C, unused if NULL
+    const GrB_Scalar Thunk,         // third input: scalar y
     GB_Werk Werk
 )
 {
@@ -57,6 +58,8 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     struct GB_Matrix_opaque T_header, AT_header, BT_header ;
     GrB_Matrix T = NULL, AT = NULL, BT = NULL ;
     GrB_BinaryOp op = op_in ;
+    GrB_IndexUnaryOp sel = sel_in ;
+    GB_Type_code xcode = (op->xtype == NULL) ? GB_ignore_code : op->xtype->code;
 
     GB_RETURN_IF_NULL_OR_FAULTY (op) ;
     GB_RETURN_IF_FAULTY_OR_POSITIONAL (accum) ;
@@ -126,6 +129,105 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     // this is no longer needed with the new index binary ops.
     bool flipij = (!T_is_csc) ;
 
+    GB_Opcode opcode_sel = (sel == NULL) ? GB_NOP_code : sel->opcode ;
+
+    bool negate_thunk = false ;
+
+    if (flipij && GB_IS_INDEXUNARYOP_CODE_POSITIONAL (opcode_sel))
+    { 
+
+        //----------------------------------------------------------------------
+        // tril, triu, diag, offdiag, ...: handle the flip
+        //----------------------------------------------------------------------
+
+        // The built-in operators are modified so they can always work as if A
+        // were in CSC format.  If A is not in CSC, then the operation is
+        // flipped.
+
+        switch (opcode_sel)
+        {
+            // TRIL becomes TRIU with thunk negated
+            case GB_TRIL_idxunop_code : 
+                negate_thunk = true ;
+                sel = GrB_TRIU ;
+                break ;
+
+            // TRIU becomes TRIL with thunk negated
+            case GB_TRIU_idxunop_code : 
+                negate_thunk = true ;
+                sel = GrB_TRIL ;
+                break ;
+
+            // DIAG, OFFDIAG, DIAGINDEX: same op, but negate the thunk
+            case GB_DIAG_idxunop_code : 
+            case GB_OFFDIAG_idxunop_code : 
+            case GB_DIAGINDEX_idxunop_code : 
+                negate_thunk = true ;
+                break ;
+
+            // ROWINDEX becomes COLINDEX
+            case GB_ROWINDEX_idxunop_code  : 
+                // i+thunk becomes j+thunk: no change to thunk
+                sel = (xcode == GB_INT32_code) ? GrB_COLINDEX_INT32
+                                              : GrB_COLINDEX_INT64 ;
+                break ;
+
+            // COLINDEX becomes ROWINDEX
+            case GB_COLINDEX_idxunop_code  : 
+                // j+thunk becomes i+thunk: no change to thunk
+                sel = (xcode == GB_INT32_code) ? GrB_ROWINDEX_INT32
+                                              : GrB_ROWINDEX_INT64 ;
+                break ;
+
+            // COLLE becomes ROWLE
+            case GB_COLLE_idxunop_code : 
+                // j <= thunk becomes i <= thunk: no change to thunk
+                sel = GrB_ROWLE ;
+                break ;
+
+            // COLGT becomes ROWGT
+            case GB_COLGT_idxunop_code : 
+                // j > thunk becomes i > thunk: no change to thunk
+                sel = GrB_ROWGT ;
+                break ;
+
+            // ROWLE becomes COLLE
+            case GB_ROWLE_idxunop_code : 
+                // i <= thunk becomes j <= thunk: no change to thunk
+                sel = GrB_COLLE ;
+                break ;
+
+            // ROWGT becomes COLGT
+            case GB_ROWGT_idxunop_code : 
+                // i > thunk becomes j > thunk: no change to thunk
+                sel = GrB_COLGT ;
+                break ;
+
+            default:;
+        }
+    }
+    
+    //--------------------------------------------------------------------------
+    // negate the Thunk if needed
+    //--------------------------------------------------------------------------
+
+    GrB_Scalar Thunk2 ;
+    struct GB_Scalar_opaque Thunk2_header ;
+    int64_t ithunk = 0 ;
+    if (negate_thunk)
+    { 
+        // Thunk = -(int64_t) Thunk
+        GB_cast_scalar (&ithunk, GB_INT64_code, Thunk->x, Thunk->type->code,
+            sizeof (int64_t)) ;
+        ithunk = -ithunk ;
+        Thunk2 = GB_Scalar_wrap (&Thunk2_header, GrB_INT64, &ithunk) ;
+    }
+    else
+    { 
+        // use Thunk as-is
+        Thunk2 = Thunk ;
+    }
+
     bool A_is_pattern, B_is_pattern ;
     GB_binop_pattern (&A_is_pattern, &B_is_pattern, false, op->opcode) ;
     if (A_transpose)
@@ -155,7 +257,7 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     GB_CLEAR_MATRIX_HEADER (T, &T_header) ;
     GB_OK (GB_kroner (T, T_is_csc, op, flipij,
         A_transpose ? AT : A, A_is_pattern,
-        B_transpose ? BT : B, B_is_pattern, sel, y, Werk)) ;
+        B_transpose ? BT : B, B_is_pattern, sel, Thunk2, Werk)) ;
 
     GB_FREE_WORKSPACE ;
     ASSERT_MATRIX_OK (T, "T = kron(A,B)", GB0) ;

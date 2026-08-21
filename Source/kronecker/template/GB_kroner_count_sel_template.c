@@ -45,7 +45,6 @@
 
     const GB_A_TYPE *restrict Ax = (GB_A_TYPE *) A->x ;
     const GB_B_TYPE *restrict Bx = (GB_B_TYPE *) B->x ;
-          GB_C_TYPE *restrict Cx = (GB_C_TYPE *) C->x ;
 
     //--------------------------------------------------------------------------
     // C = kron (A,B): count non-zeros in C
@@ -84,12 +83,13 @@
             GB_GETB (b, Bx, 0, true) ;
         }
         GB_void cwork [GB_VLA(csize)] ;
+        GB_C_TYPE *cwork_ptr = (GB_C_TYPE *) cwork ;
         if (GB_C_ISO)
         { 
             // C is iso, so the Kronecker product result is invariant,
             // compute it once
             // the positional selector will still be evaluated per-element below
-            GB_KRONECKER_OP (cwork, 0, a, 0, 0, b, 0, 0) ;
+            GB_KRONECKER_OP (cwork_ptr, 0, a, 0, 0, b, 0, 0) ;
         }
 
         for (int64_t pA = pA_start ; pA < pA_end ; pA++)
@@ -120,7 +120,7 @@
                 // compute C(iC,jC) = A(iA,jA) * B(iB,jB) into a temporary buffer
                 if (!GB_C_ISO)
                 { 
-                    GB_KRONECKER_OP (cwork, 0, a, iA, jA, b, iB, jB) ;
+                    GB_KRONECKER_OP (cwork_ptr, 0, a, iA, jA, b, iB, jB) ;
                 }
                 
                 //--------------------------------------------------------------
@@ -133,7 +133,7 @@
                 // user-defined selector: call the function 
                 // to check the value
                 bool result = false ;
-                sel (&result, cwork, iC, jC, y) ;
+                sel (&result, cwork_ptr, iC, jC, y) ;
                 
                 if (result)
                 { 

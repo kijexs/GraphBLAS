@@ -1836,7 +1836,7 @@ GrB_Info GB_kroner_jit
     // input:
     const GrB_BinaryOp binaryop,
     const GxB_index_unary_function selector,
-    const void *y,
+    const GB_void *y,
     const bool flipij,
     const GrB_Matrix A,
     const GrB_Matrix B,

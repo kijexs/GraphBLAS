@@ -35,6 +35,9 @@
     GB_Ch_DECLARE (Ch,      ) ; GB_Ch_PTR (Ch, C) ;
     const int64_t cnvec = anvec * bnvec ;
     const int64_t csize = C->type->size ;
+    #define CX_PTR(Cx, pC) ((void *)((Cx) + (pC)))
+    #else
+    #define CX_PTR(Cx, pC) ((void *)((Cx) + (pC)*csize))
     #endif
 
     GB_Ai_DECLARE (Ai, const) ; GB_Ai_PTR (Ai, A) ;
@@ -115,15 +118,8 @@
                 { 
                     GB_GETB (b, Bx, pB, false) ;
                 }
-                // C(iC,jC) = A(iA,jA) * B(iB,jB)
-                if (!GB_C_IS_FULL)
-                { 
-                    GB_ISET (Ci, pC, iAblock + iB) ;
-                }
-                if (!GB_C_ISO)
-                { 
-                    GB_KRONECKER_OP (Cx, pC, a, iA, jA, b, iB, jB) ;
-                }
+                
+                GB_KRONECKER_OP (Cx, pC, a, iA, jA, b, iB, jB) ;
                     
                 //----------------------------------------------------------
                 // check if C(iC,jC) should be kept in the result
@@ -131,21 +127,20 @@
 
                 int64_t iC = iAblock + iB ;
                 int64_t jC = jA * bvdim + jB ;
-            
+
                 // user-defined selector: call the function
                 // to check the value
                 bool result = false ;
-                if (GB_C_ISO)
-                { 
-                    sel (&result, Cx, iC, jC, y) ;
-                }
-                else
-                { 
-                    sel (&result, Cx + pC * csize, iC, jC, y) ;
-                }
+                sel (&result, CX_PTR(Cx, pC), iC, jC, y) ;
                 
                 if (result)
                 { 
+                    // C(iC,jC) = A(iA,jA) * B(iB,jB)
+                    if (!GB_C_IS_FULL)
+                    { 
+                        GB_ISET (Ci, pC, iC) ;
+                    }
+                    
                     pC++ ;
                 }
             }

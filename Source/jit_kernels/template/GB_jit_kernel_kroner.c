@@ -19,7 +19,7 @@ GB_JIT_GLOBAL GB_JIT_KERNEL_KRONER_PROTO (GB_jit_kernel)
     }
     else 
     { 
-        if (sel != NULL)
+        if (sel != NULL && !C->iso)
         { 
             #include "template/GB_kroner_sel_template.c"
         }

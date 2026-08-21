@@ -21,7 +21,7 @@ here = pwd ;
 if (ispc)
     here = strrep (here, filesep, '/') ;
 end
-if (isempty (strfind (here, 'GraphBLAS/Test')))
+if (isempty (strfind (here, '/Test')))
     % this function should only be done in GraphBLAS/Test
     error ('testmake should be used in Test directory only') ;
 end
@@ -90,7 +90,7 @@ end
 
 if ispc
     if (need_rename)
-        library_path = sprintf ('%s/../GraphBLAS/build/Release', pwd) ;
+        library_path = sprintf ('%s/../build/Release', pwd) ;
     else
         library_path = sprintf ('%s/../build/Release', pwd) ;
     end
@@ -181,7 +181,7 @@ for k = 1:length (cfiles)
         % compile the cfile
         fprintf ('.') ;
         % fprintf ('%s\n', cfile) ;
-        mexcmd = sprintf ('mex -c %s -silent %s %s', flags, inc, cfile) ;
+        mexcmd = sprintf ('mex -c %s %s %s', flags, inc, cfile) ;
         % fprintf ('\n%s\n', mexcmd) ;
         if (dryrun)
             fprintf ('%s\n', mexcmd) ;
@@ -214,7 +214,7 @@ for k = 1:length (mexfunctions)
     % compile if it is newer than its object file, or if any cfile was compiled
     if (make_all || tc > tobj || any_c_compiled)
         % compile the mexFunction
-        mexcmd = sprintf ('mex %s -silent %s %s ''%s'' %s %s', ...
+        mexcmd = sprintf ('mex %s %s %s ''%s'' %s %s', ...
             Lflags, flags, inc, mexfunction, objlist, libraries) ;
         fprintf (':') ;
         % fprintf ('%s\n', mexfunction) ;

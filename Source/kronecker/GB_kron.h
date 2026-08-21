@@ -24,8 +24,8 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     bool A_transpose,               // if true, use A' instead of A
     const GrB_Matrix B,             // input matrix
     bool B_transpose,               // if true, use B' instead of B
-    const GrB_IndexUnaryOp sel,     // optional selector for C, unused if NULL
-    const void *y,                  // third input: scalar y
+    const GrB_IndexUnaryOp sel_in,  // optional selector for C, unused if NULL
+    const GrB_Scalar Thunk,         // third input: scalar y
     GB_Werk Werk
 ) ;
 
@@ -40,7 +40,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     const GrB_Matrix B,             // input matrix
     bool B_is_pattern,              // true if values of B are not used
     const GrB_IndexUnaryOp sel,     // optional selector for C, unused if NULL
-    const void *y,                  // third input: scalar y
+    const GrB_Scalar Thunk,         // third input: scalar y
     GB_Werk Werk
 ) ;
 
