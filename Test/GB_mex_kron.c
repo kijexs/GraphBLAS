@@ -9,7 +9,7 @@
 
 #include "GB_mex.h"
 
-#define USAGE "C = GB_mex_kron (C, Mask, accum, mult, A, B, desc)"
+#define USAGE "C = GB_mex_kron (C, Mask, accum, mult, A, B, desc [, sel, scalar])"
 
 #define FREE_ALL                    \
 {                                   \
@@ -18,6 +18,7 @@
     GrB_Matrix_free_(&C) ;          \
     GrB_Descriptor_free_(&desc) ;   \
     GrB_Matrix_free_(&Mask) ;       \
+    GrB_Matrix_free_(&S) ;          \
     GB_mx_put_global (true) ;       \
 }
 
@@ -29,7 +30,7 @@ void mexFunction
     const mxArray *pargin [ ]
 )
 {
-
+   
     bool malloc_debug = GB_mx_get_global (true) ;
     GrB_Matrix A = NULL ;
     GrB_Matrix B = NULL ;
@@ -37,9 +38,12 @@ void mexFunction
     GrB_Matrix Mask = NULL ;
     GrB_Descriptor desc = NULL ;
     GrB_BinaryOp mult = NULL ;
+    
+    GrB_Matrix S = NULL ;
+    GrB_Scalar scalar = NULL ;
+    GrB_IndexUnaryOp sel = NULL ;
 
-    // check inputs
-    if (nargout > 1 || nargin < 6 || nargin > 7)
+    if (nargout > 1 || nargin < 6 || nargin > 9)
     {
         mexErrMsgTxt ("Usage: " USAGE) ;
     }
@@ -108,29 +112,96 @@ void mexFunction
         mexErrMsgTxt ("desc failed") ;
     }
 
+    // get selector (sel) and scalar (y), if present
+    if (nargin >= 8)
+    {
+        if (!GB_mx_mxArray_to_IndexUnaryOp (&sel, pargin [7], "sel",
+            C->type) || sel == NULL)
+        {
+            FREE_ALL ;
+            mexErrMsgTxt ("sel failed") ;
+        }
+
+        if (nargin == 9)
+        {
+            S = GB_mx_mxArray_to_Matrix (pargin [8], "y input", false, true) ;
+            if (S == NULL || S->magic != GB_MAGIC)
+            {
+                FREE_ALL ;
+                mexErrMsgTxt ("y failed") ;
+            }
+            
+            uint64_t snrows, sncols, snvals ;
+            GrB_Matrix_nrows (&snrows, S) ;
+            GrB_Matrix_ncols (&sncols, S) ;
+            GrB_Matrix_nvals (&snvals, S) ;
+            int fmt ;
+            GxB_Matrix_Option_get_ (S, GxB_FORMAT, &fmt) ;
+            
+            if (snrows != 1 || sncols != 1 || snvals != 1 || fmt != GxB_BY_COL)
+            {
+                FREE_ALL ;
+                mexErrMsgTxt ("y failed") ;
+            }
+            scalar = (GrB_Scalar) S ;
+        }
+    }
+
     // test all 3 variants: monoid, semiring, and binary op
     if (mult == GrB_PLUS_FP64)
     {
-        // C<Mask> = accum(C,kron(A,B)), monoid variant
-        METHOD (GrB_Matrix_kronecker_Monoid_ (C, Mask, accum,
-            GrB_PLUS_MONOID_FP64, A, B, desc)) ;
+        if (sel != NULL)
+        {
+            METHOD (GrB_Matrix_kronecker_Monoid_sel (C, Mask, accum,
+                GrB_PLUS_MONOID_FP64, A, B, desc, sel, scalar)) ;
+        }
+        else
+        {
+            // C<Mask> = accum(C,kron(A,B)), monoid variant
+            METHOD (GrB_Matrix_kronecker_Monoid_ (C, Mask, accum,
+                GrB_PLUS_MONOID_FP64, A, B, desc)) ;
+        }
     }
     else if (mult == GrB_TIMES_FP64)
     {
-        // C<Mask> = accum(C,kron(A,B)), semiring variant
-        METHOD (GrB_Matrix_kronecker_Semiring_ (C, Mask, accum,
-            GrB_PLUS_TIMES_SEMIRING_FP64, A, B, desc)) ;
+        if (sel != NULL)
+        {
+            METHOD (GrB_Matrix_kronecker_Semiring_sel (C, Mask, accum,
+                GrB_PLUS_TIMES_SEMIRING_FP64, A, B, desc, sel, scalar)) ;
+        }
+        else
+        {
+            // C<Mask> = accum(C,kron(A,B)), semiring variant
+            METHOD (GrB_Matrix_kronecker_Semiring_ (C, Mask, accum,
+                GrB_PLUS_TIMES_SEMIRING_FP64, A, B, desc)) ;
+        }
     }
     else if (mult == GrB_TIMES_FP32)
     {
-        // C<Mask> = accum(C,kron(A,B)), binary op variant (old name)
-        METHOD (GxB_kron (C, Mask, accum, mult, A, B, desc)) ;
+        if (sel != NULL)
+        {
+            METHOD (GrB_Matrix_kronecker_BinaryOp_sel (C, Mask, accum, mult,
+                A, B, desc, sel, scalar)) ;
+        }
+        else
+        {
+            // C<Mask> = accum(C,kron(A,B)), binary op variant (old name)
+            METHOD (GxB_kron (C, Mask, accum, mult, A, B, desc)) ;
+        }
     }
     else
     {
-        // C<Mask> = accum(C,kron(A,B)), binary op variant (new name)
-        METHOD (GrB_Matrix_kronecker_BinaryOp_ (C, Mask, accum, mult,
-            A, B, desc)) ;
+        if (sel != NULL)
+        {
+            METHOD (GrB_Matrix_kronecker_BinaryOp_sel (C, Mask, accum, mult,
+                A, B, desc, sel, scalar)) ;
+        }
+        else
+        {
+            // C<Mask> = accum(C,kron(A,B)), binary op variant (new name)
+            METHOD (GrB_Matrix_kronecker_BinaryOp_ (C, Mask, accum, mult,
+                A, B, desc)) ;
+        }
     }
 
     // return C as a struct and free the GraphBLAS C
@@ -138,4 +209,3 @@ void mexFunction
 
     FREE_ALL ;
 }
-
