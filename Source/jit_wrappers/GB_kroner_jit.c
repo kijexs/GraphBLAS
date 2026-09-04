@@ -18,9 +18,10 @@ GrB_Info GB_kroner_jit
     GrB_Matrix C,
     // input:
     const GrB_BinaryOp binaryop,
-    const GxB_index_unary_function selector,
+    const GrB_IndexUnaryOp select,
     const GB_void *y,
     const bool flipij,
+    const bool flipij_sel,
     const GrB_Matrix A,
     const GrB_Matrix B,
     const int nthreads
@@ -43,7 +44,7 @@ GrB_Info GB_kroner_jit
         GB_JIT_KERNEL_KRONER, /* is_ewisemult: */ false, /* C_iso: */ C->iso,
         /* C_in_iso: */ false, C_sparsity, C->type,
         C->p_is_32, C->j_is_32, C->i_is_32,
-        /* M: */ NULL, true, false, binaryop, flipij, false, A, B) ;
+        /* M: */ NULL, true, (select != NULL), binaryop, flipij, flipij_sel, A, B) ;
 
     //--------------------------------------------------------------------------
     // get the kernel function pointer, loading or compiling it if needed
@@ -52,7 +53,7 @@ GrB_Info GB_kroner_jit
     void *dl_function ;
     GrB_Info info = GB_jitifyer_load (&dl_function,
         GB_jit_ewise_family, "kroner",
-        hash, &encoding, suffix, NULL, NULL,
+        hash, &encoding, suffix, (GrB_Semiring) select, NULL,
         (GB_Operator) binaryop, C->type, A->type, B->type) ;
     if (info != GrB_SUCCESS) return (info) ;
 
@@ -62,6 +63,6 @@ GrB_Info GB_kroner_jit
 
     #include "include/GB_pedantic_disable.h"
     GB_jit_dl_function GB_jit_kernel = (GB_jit_dl_function) dl_function ;
-    return (GB_jit_kernel (C, A, B, nthreads, binaryop->theta, selector, y, flipij, &GB_callback)) ;
+    return (GB_jit_kernel (C, A, B, nthreads, binaryop->theta, select, y, flipij_sel, &GB_callback)) ;
 }
 

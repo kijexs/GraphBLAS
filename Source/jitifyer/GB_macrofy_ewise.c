@@ -18,6 +18,7 @@ void GB_macrofy_ewise           // construct all macros for GrB_eWise
     uint64_t method_code,
     uint64_t kcode,
     GrB_BinaryOp binaryop,      // binaryop to macrofy
+    GrB_IndexUnaryOp select,    // selector for Kronecker product
     GrB_Type ctype,
     GrB_Type atype,             // NULL for apply bind1st
     GrB_Type btype              // NULL for apply bind2nd
@@ -82,6 +83,15 @@ void GB_macrofy_ewise           // construct all macros for GrB_eWise
 
     bool is_eadd = (kcode == GB_JIT_KERNEL_ADD) ;
     bool is_kron = (kcode == GB_JIT_KERNEL_KRONER) ;
+
+    bool flipij_sel = false ;
+    if (is_kron)
+    {
+        // flipxy contains flipij_sel for kronecker
+        flipij_sel = flipxy ;
+        
+        flipxy = false ;
+    }
 
     //--------------------------------------------------------------------------
     // describe the operator
@@ -272,6 +282,195 @@ void GB_macrofy_ewise           // construct all macros for GrB_eWise
 
     GB_macrofy_input (fp, "b", "B", "B", true, flipxy ? xtype : ytype,
         btype, bsparsity, bcode, B_iso, -1, Bp_is_32, Bj_is_32, Bi_is_32) ;
+
+    //--------------------------------------------------------------------------
+    // macros for the selector (kronecker only)
+    //--------------------------------------------------------------------------
+
+    if (select != NULL && is_kron)
+    {
+        fprintf (fp, "#define GB_HAS_SELECTOR 1\n") ;
+
+        //----------------------------------------------------------------------
+        // extract the select method_code
+        //----------------------------------------------------------------------
+        
+        int zcode_sel = select->ztype->code ;
+        int xcode_sel = (select->xtype == NULL) ? 0 : select->xtype->code ;
+        int ycode_sel = select->ytype->code ;
+        
+        // Debug assertions
+        ASSERT (zcode_sel == select->ztype->code) ;
+        ASSERT (xcode_sel == ((select->xtype == NULL) ? 0 : select->xtype->code)) ;
+        ASSERT (ycode_sel == select->ytype->code) ;
+
+        //----------------------------------------------------------------------
+        // enumify the operator
+        //----------------------------------------------------------------------
+
+        int idxop_ecode ;
+        bool x_dep, i_dep, j_dep, y_dep ;
+        
+        GB_enumify_unop (&idxop_ecode, &x_dep, &i_dep, &j_dep, &y_dep,
+            flipij_sel, select->opcode, xcode_sel) ;
+        if (!x_dep) xcode_sel = 0 ;
+        if (!y_dep) ycode_sel = 0 ;
+
+        //----------------------------------------------------------------------
+        // describe the operator
+        //----------------------------------------------------------------------
+
+        GrB_Type xtype_sel, ytype_sel, ztype_sel ;
+        const char *xtype_name_sel, *ytype_name_sel, *ztype_name_sel ;
+
+        xtype_sel = (xcode_sel == 0) ? NULL : select->xtype ;
+        ytype_sel = (ycode_sel == 0) ? GrB_INT64 : select->ytype ;
+        ztype_sel = select->ztype ;
+        xtype_name_sel = (xtype_sel == NULL) ? "GB_void" : xtype_sel->name ;
+        ytype_name_sel = (ytype_sel == NULL) ? "int64_t" : ytype_sel->name ;
+        ztype_name_sel = (ztype_sel == NULL) ? "bool" : ztype_sel->name ;
+        
+        if (select->hash == 0)
+        {  
+            fprintf (fp, "// select op: (%s%s, %s)\n\n",
+                select->name, flipij_sel ? " (flipped ij)" : "", xtype_name_sel) ;
+        }
+        else 
+        {  
+            fprintf (fp, "// select op: %s%s, ztype_sel: %s, xtype_sel: %s, ytype_sel: %s\n\n",
+                select->name, flipij_sel ? " (flipped ij)" : "",
+                ztype_name_sel, xtype_name_sel, ytype_name_sel) ;
+        }
+
+        //----------------------------------------------------------------------
+        // construct the typedefs for selector
+        //----------------------------------------------------------------------
+
+        fprintf (fp, "// select operator types:\n") ;
+        GB_macrofy_type (fp, "SEL_Z", "_", ztype_name_sel) ;
+        GB_macrofy_type (fp, "SEL_X", "_", xtype_name_sel) ;
+        GB_macrofy_type (fp, "SEL_Y", "_", ytype_name_sel) ;
+
+        //----------------------------------------------------------------------
+        // construct macros for the unary operator
+        //----------------------------------------------------------------------
+
+        fprintf (fp, "\n// index unary operator%s:\n",
+            flipij_sel ? " (flipped ij)" : "") ;
+        GB_macrofy_unop (fp, "GB_IDXUNOP", flipij_sel, idxop_ecode, (GB_Operator) select) ;
+
+        //----------------------------------------------------------------------
+        // construct the GB_TEST_KRON_VALUE_OF_ENTRY(keep, c_ptr) macro
+        //----------------------------------------------------------------------
+
+        fprintf (fp, "\n// test if C(iC,jC) is to be kept:\n") ;
+
+        int ccode = ctype->code ;
+
+        fprintf (fp, "#define GB_TEST_KRON_VALUE_OF_ENTRY(keep, c_ptr) \\\n"
+                    "    bool keep ;                        \\\n"
+                    "    GB_SEL_Y_TYPE y_val ;              \\\n"
+                    "    if (y != NULL) y_val = ((GB_SEL_Y_TYPE *)y)[0] ; \\\n") ;
+
+        if (zcode_sel == GB_BOOL_code)
+        {
+            // no typecasting of z to keep
+            
+            if (xcode_sel == 0)
+            { 
+                // operator does not depend on x
+                fprintf (fp, "    GB_IDXUNOP (keep, , iC, jC, y_val) ;\n") ;
+            }
+            else
+            {
+                // Declare x_val and load from c_ptr using proper casting
+                fprintf (fp, "    GB_SEL_X_TYPE x_val ;              \\\n") ;
+                if (ccode == xcode_sel)
+                {
+                    // Same type: direct cast is safe
+                    fprintf (fp, "    x_val = *((GB_SEL_X_TYPE *)(c_ptr)) ; \\\n") ;
+                }
+                else
+                {
+                    // Different type: use cast function
+                    int nargs_cx;
+                    const char *cast_c_to_x = GB_macrofy_cast_expression(fp,
+                        select->xtype, ctype, &nargs_cx);
+                    if (cast_c_to_x == NULL)
+                    {
+                        fprintf (fp, "    x_val = (GB_SEL_X_TYPE) (*((GB_C_TYPE *)(c_ptr))) ; \\\n") ;
+                    }
+                    else
+                    {
+                        fprintf (fp, "    { GB_C_TYPE cwork = *((GB_C_TYPE *)(c_ptr)) ; \\\n") ;
+                        if (nargs_cx == 3)
+                        {
+                            fprintf (fp, cast_c_to_x, "      x_val", "cwork", "cwork") ;
+                        }
+                        else
+                        {
+                            fprintf (fp, cast_c_to_x, "      x_val", "cwork") ;
+                        }
+                        fprintf (fp, " ; } \\\n") ;
+                    }
+                }
+                fprintf (fp, "    GB_IDXUNOP (keep, x_val, iC, jC, y_val) ;\n") ;
+            }
+        }
+        else
+        {
+            // need to cast result to bool
+            fprintf (fp, "    GB_SEL_Z_TYPE z_val ;              \\\n") ;
+            if (xcode_sel == 0)
+            { 
+                fprintf (fp, "    GB_IDXUNOP (z_val, , iC, jC, y_val) ; \\\n") ;
+            }
+            else
+            {
+                fprintf (fp, "    GB_SEL_X_TYPE x_val ;              \\\n") ;
+                if (ccode == xcode_sel)
+                {
+                    fprintf (fp, "    x_val = *((GB_SEL_X_TYPE *)(c_ptr)) ; \\\n") ;
+                }
+                else
+                {
+                    int nargs_cx;
+                    const char *cast_c_to_x = GB_macrofy_cast_expression(fp,
+                        select->xtype, ctype, &nargs_cx);
+                    fprintf (fp, "    { GB_C_TYPE cwork = *((GB_C_TYPE *)(c_ptr)) ; \\\n") ;
+                    if (cast_c_to_x == NULL)
+                    {
+                        fprintf (fp, "      x_val = (GB_SEL_X_TYPE) cwork ; \\\n") ;
+                    }
+                    else if (nargs_cx == 3)
+                    {
+                        fprintf (fp, cast_c_to_x, "        x_val", "cwork", "cwork") ;
+                    }
+                    else
+                    {
+                        fprintf (fp, cast_c_to_x, "        x_val", "cwork") ;
+                    }
+                    fprintf (fp, " ; } \\\n") ;
+                }
+                fprintf (fp, "    GB_IDXUNOP (z_val, x_val, iC, jC, y_val) ; \\\n") ;
+            }
+
+            // Cast z_val to bool
+            int nargs_z;
+            const char *cast_z_to_bool = GB_macrofy_cast_expression(fp,
+                GrB_BOOL, select->ztype, &nargs_z);
+            ASSERT (cast_z_to_bool != NULL);
+            if (nargs_z == 3)
+            {
+                fprintf (fp, cast_z_to_bool, "    keep", "z_val", "z_val") ;
+            }
+            else
+            {
+                fprintf (fp, cast_z_to_bool, "    keep", "z_val") ;
+            }
+            fprintf (fp, " ;\n") ;
+        }
+    }
 
     //--------------------------------------------------------------------------
     // include the final default definitions

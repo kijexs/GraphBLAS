@@ -132,8 +132,8 @@
 
                 // user-defined selector: call the function 
                 // to check the value
-                bool result = false ;
-                sel (&result, cwork_ptr, iC, jC, y) ;
+                
+                GB_TEST_KRON_VALUE_OF_ENTRY (result, cwork_ptr) ;
                 
                 if (result)
                 { 

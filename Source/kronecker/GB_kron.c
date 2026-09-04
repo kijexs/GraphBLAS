@@ -128,12 +128,13 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     // do not flipij the builtin positional ops (FIRSTI, and friends);
     // this is no longer needed with the new index binary ops.
     bool flipij = (!T_is_csc) ;
+    bool flipij_sel = flipij ;
 
     GB_Opcode opcode_sel = (sel == NULL) ? GB_NOP_code : sel->opcode ;
 
     bool negate_thunk = false ;
 
-    if (flipij && GB_IS_INDEXUNARYOP_CODE_POSITIONAL (opcode_sel))
+    if (flipij_sel && GB_IS_INDEXUNARYOP_CODE_POSITIONAL (opcode_sel))
     { 
 
         //----------------------------------------------------------------------
@@ -205,8 +206,19 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
 
             default:;
         }
+
+        // flipij_sel is now false for any positional operator
+        flipij_sel = false ;
     }
     
+    if (sel != NULL && opcode_sel != GB_USER_idxunop_code)
+    { 
+        // flipij can still be true but is only needed for if the
+        // GrB_IndexUnaryOp is user-defined.  So set here it to false for all
+        // but user-defined ops.
+        flipij_sel = false ;
+    }
+
     //--------------------------------------------------------------------------
     // negate the Thunk if needed
     //--------------------------------------------------------------------------
@@ -257,7 +269,7 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     GB_CLEAR_MATRIX_HEADER (T, &T_header) ;
     GB_OK (GB_kroner (T, T_is_csc, op, flipij,
         A_transpose ? AT : A, A_is_pattern,
-        B_transpose ? BT : B, B_is_pattern, sel, Thunk2, Werk)) ;
+        B_transpose ? BT : B, B_is_pattern, sel, flipij_sel, Thunk2, Werk)) ;
 
     GB_FREE_WORKSPACE ;
     ASSERT_MATRIX_OK (T, "T = kron(A,B)", GB0) ;

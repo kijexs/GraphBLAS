@@ -45,6 +45,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     const GrB_Matrix B_in,          // input matrix
     bool B_is_pattern,              // true if values of B are not used
     const GrB_IndexUnaryOp select,  // optional selector for C, unused if NULL
+    const bool flipij_sel,          // if true, i and j are flipped for selector
     const GrB_Scalar Thunk,         // third input: scalar y
     GB_Werk Werk
 )
@@ -156,6 +157,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     //--------------------------------------------------------------------------
 
     GrB_Type ctype = op->ztype ;
+    GB_Type_code ccode = ctype->code ;
     const size_t csize = ctype->size ;
     GB_void cscalar [GB_VLA(csize)] ;
     bool C_iso = GB_emult_iso (cscalar, ctype, A, B, op) ;
@@ -208,7 +210,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         C_stub->p = p ;
         C_stub->nvec = 0 ;
         // via the JIT kernel
-        info = GB_kroner_jit (C_stub, op, sel, y, flipij, A, B, nthreads) ;
+        info = GB_kroner_jit (C_stub, op, select, y, flipij, flipij_sel, A, B, nthreads) ;
 
         if (info == GrB_NO_VALUE)
         { 
@@ -224,6 +226,46 @@ GrB_Info GB_kroner                  // C = kron (A,B)
             const bool B_iso = B->iso ;
             const int64_t asize = A->type->size ;
             const int64_t bsize = B->type->size ;
+            const GB_Type_code zcode = select->ztype->code ;
+            const GB_Type_code xcode = (select->xtype == NULL) ? 0 : select->xtype->code ;
+            const size_t zsize = select->ztype->size ;
+            const size_t xsize = (select->xtype == NULL) ? 0 : select->xtype->size ;
+            GB_cast_function cast_Z_to_bool, cast_C_to_X ;
+    
+            if (select->ztype == GrB_BOOL && select->xtype == ctype)
+            { 
+
+                //------------------------------------------------------------------
+                // A is non-iso and no typecasting is required
+                //------------------------------------------------------------------
+
+                #undef  GB_TEST_KRON_VALUE_OF_ENTRY
+                #define GB_TEST_KRON_VALUE_OF_ENTRY(keep,p)                     \
+                    bool keep ;                                                 \
+                    sel (&keep, p, flipij_sel ? jC : iC,                        \
+                         flipij_sel ? iC : jC, y) ;                             
+
+            }
+            else
+            { 
+
+                //------------------------------------------------------------------
+                // A is non-iso and typecasting is required
+                //------------------------------------------------------------------
+
+                cast_C_to_X = GB_cast_factory(xcode, ccode) ;
+                cast_Z_to_bool = GB_cast_factory(GB_BOOL_code, zcode) ;
+
+                #undef  GB_TEST_KRON_VALUE_OF_ENTRY
+                #define GB_TEST_KRON_VALUE_OF_ENTRY(keep,p)                     \
+                    bool keep ;                                                 \
+                    GB_void z [GB_VLA(zsize)] ;                                 \
+                    GB_void x [GB_VLA(xsize)] ;                                 \
+                    cast_C_to_X (x, p, csize) ;                                 \
+                    sel (z, x, flipij_sel ? jC : iC, flipij_sel ? iC : jC, y) ; \
+                    cast_Z_to_bool (&keep, z, zsize) ;
+
+            }
 
             GxB_binary_function fmult = op->binop_function ;
             GxB_index_binary_function fmult_idx = op->idxbinop_function ;
@@ -506,7 +548,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     }
     
     // via the JIT kernel
-    info = GB_kroner_jit (C, op, sel, y, flipij, A, B, nthreads) ;
+    info = GB_kroner_jit (C, op, select, y, flipij, flipij_sel, A, B, nthreads) ;
 
     C->p = temporary_p ;
     
@@ -523,6 +565,52 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         const bool B_iso = B->iso ;
         const int64_t asize = A->type->size ;
         const int64_t bsize = B->type->size ;
+        GB_Type_code zcode, xcode ;
+        size_t zsize, xsize ;
+        GB_cast_function cast_Z_to_bool, cast_C_to_X ;
+
+        if (sel != NULL && !C_iso)
+        {
+            zcode = select->ztype->code ;
+            xcode = (select->xtype == NULL) ? 0 : select->xtype->code ;
+            zsize = select->ztype->size ;
+            xsize = (select->xtype == NULL) ? 0 :select->xtype->size ;
+            
+            if (select->ztype == GrB_BOOL && select->xtype == ctype)
+            { 
+
+                //------------------------------------------------------------------
+                // A is non-iso and no typecasting is required
+                //------------------------------------------------------------------
+
+                #undef  GB_TEST_KRON_VALUE_OF_ENTRY
+                #define GB_TEST_KRON_VALUE_OF_ENTRY(keep,p)                     \
+                    bool keep ;                                                 \
+                    sel (&keep, p, flipij_sel ? jC : iC,                        \
+                         flipij_sel ? iC : jC, y) ;                             
+
+            }
+            else
+            { 
+
+                //------------------------------------------------------------------
+                // A is non-iso and typecasting is required
+                //------------------------------------------------------------------
+
+                cast_C_to_X = GB_cast_factory(xcode, ccode) ;
+                cast_Z_to_bool = GB_cast_factory(GB_BOOL_code, zcode) ;
+
+                #undef  GB_TEST_KRON_VALUE_OF_ENTRY
+                #define GB_TEST_KRON_VALUE_OF_ENTRY(keep,p)                     \
+                    bool keep ;                                                 \
+                    GB_void z [GB_VLA(zsize)] ;                                 \
+                    GB_void x [GB_VLA(xsize)] ;                                 \
+                    cast_C_to_X (x, p, csize) ;                                 \
+                    sel (z, x, flipij_sel ? jC : iC, flipij_sel ? iC : jC, y) ; \
+                    cast_Z_to_bool (&keep, z, zsize) ;
+
+            }
+        }
 
         GxB_binary_function fmult = op->binop_function ;
         GxB_index_binary_function fmult_idx = op->idxbinop_function ;
@@ -538,7 +626,6 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         }
 
         #define GB_C_IS_FULL C_is_full
-        #define GB_C_IS_HYPER C_is_hyper
 
         #define GB_DECLAREA(a) GB_void a [GB_VLA(asize)]
         #define GB_DECLAREB(b) GB_void b [GB_VLA(bsize)]

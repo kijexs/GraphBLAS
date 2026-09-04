@@ -40,6 +40,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     const GrB_Matrix B,             // input matrix
     bool B_is_pattern,              // true if values of B are not used
     const GrB_IndexUnaryOp sel,     // optional selector for C, unused if NULL
+    const bool flipij_sel,          // if true, i and j are flipped for selector
     const GrB_Scalar Thunk,         // third input: scalar y
     GB_Werk Werk
 ) ;

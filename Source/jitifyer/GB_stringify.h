@@ -178,6 +178,7 @@ void GB_macrofy_ewise           // construct all macros for GrB_eWise
     uint64_t method_code,
     uint64_t kcode,
     GrB_BinaryOp binaryop,      // binaryop to macrofy
+    GrB_IndexUnaryOp select,    // selector for Kronecker product
     GrB_Type ctype,
     GrB_Type atype,             // NULL for apply bind1st
     GrB_Type btype              // NULL for apply bind2nd
@@ -1835,9 +1836,10 @@ GrB_Info GB_kroner_jit
     GrB_Matrix C,
     // input:
     const GrB_BinaryOp binaryop,
-    const GxB_index_unary_function selector,
+    const GrB_IndexUnaryOp select,
     const GB_void *y,
     const bool flipij,
+    const bool flipij_sel,
     const GrB_Matrix A,
     const GrB_Matrix B,
     const int nthreads

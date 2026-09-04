@@ -34,7 +34,6 @@
     GB_Cp_DECLARE (Cp,      ) ; GB_Cp_PTR (Cp, C) ;
     GB_Ch_DECLARE (Ch,      ) ; GB_Ch_PTR (Ch, C) ;
     const int64_t cnvec = anvec * bnvec ;
-    const int64_t csize = C->type->size ;
     #define CX_PTR(Cx, pC) ((void *)((Cx) + (pC)))
     #else
     #define CX_PTR(Cx, pC) ((void *)((Cx) + (pC)*csize))
@@ -130,8 +129,9 @@
 
                 // user-defined selector: call the function
                 // to check the value
-                bool result = false ;
-                sel (&result, CX_PTR(Cx, pC), iC, jC, y) ;
+                //bool result = false ;
+
+                GB_TEST_KRON_VALUE_OF_ENTRY (result, CX_PTR(Cx, pC)) ;
                 
                 if (result)
                 { 
