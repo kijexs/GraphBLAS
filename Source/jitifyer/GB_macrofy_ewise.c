@@ -299,7 +299,6 @@ void GB_macrofy_ewise           // construct all macros for GrB_eWise
         int xcode_sel = (select->xtype == NULL) ? 0 : select->xtype->code ;
         int ycode_sel = select->ytype->code ;
         
-        // Debug assertions
         ASSERT (zcode_sel == select->ztype->code) ;
         ASSERT (xcode_sel == ((select->xtype == NULL) ? 0 : select->xtype->code)) ;
         ASSERT (ycode_sel == select->ytype->code) ;
@@ -346,6 +345,8 @@ void GB_macrofy_ewise           // construct all macros for GrB_eWise
         // construct the typedefs for selector
         //----------------------------------------------------------------------
 
+        GB_macrofy_typedefs (fp, ctype, NULL, NULL, xtype_sel, ytype_sel, ztype_sel, NULL) ;
+
         fprintf (fp, "// select operator types:\n") ;
         GB_macrofy_type (fp, "SEL_Z", "_", ztype_name_sel) ;
         GB_macrofy_type (fp, "SEL_X", "_", xtype_name_sel) ;
@@ -383,16 +384,15 @@ void GB_macrofy_ewise           // construct all macros for GrB_eWise
             }
             else
             {
-                // Declare x_val and load from c_ptr using proper casting
+                // declare x_val and load from c_ptr using proper casting
                 fprintf (fp, "    GB_SEL_X_TYPE x_val ;              \\\n") ;
                 if (ccode == xcode_sel)
                 {
-                    // Same type: direct cast is safe
                     fprintf (fp, "    x_val = *((GB_SEL_X_TYPE *)(c_ptr)) ; \\\n") ;
                 }
                 else
                 {
-                    // Different type: use cast function
+                    // different type: use cast function
                     int nargs_cx;
                     const char *cast_c_to_x = GB_macrofy_cast_expression(fp,
                         select->xtype, ctype, &nargs_cx);
@@ -455,7 +455,7 @@ void GB_macrofy_ewise           // construct all macros for GrB_eWise
                 fprintf (fp, "    GB_IDXUNOP (z_val, x_val, iC, jC, y_val) ; \\\n") ;
             }
 
-            // Cast z_val to bool
+            // cast z_val to bool
             int nargs_z;
             const char *cast_z_to_bool = GB_macrofy_cast_expression(fp,
                 GrB_BOOL, select->ztype, &nargs_z);
