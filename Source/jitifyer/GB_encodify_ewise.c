@@ -81,10 +81,13 @@ uint64_t GB_encodify_ewise      // encode an ewise problem
     //--------------------------------------------------------------------------
 
     hash = hash ^ GB_jitifyer_hash_encoding (encoding) ;
-    if (is_kron && Mask_comp)
+    if (is_kron && M != NULL)
     {
         // Mask_comp contains a selector flag for Kronecker product
         hash ^= UINT64_C (1) ;
+
+        const uint64_t sel_code = (uint64_t) M ;
+        hash ^= sel_code ;
     }
 
     return ((hash == 0 || hash == UINT64_MAX) ? GB_MAGIC : hash) ;
