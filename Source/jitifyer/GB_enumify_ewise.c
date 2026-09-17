@@ -55,7 +55,7 @@ void GB_enumify_ewise       // enumerate a GrB_eWise problem
     ASSERT_BINARYOP_OK (binaryop, "binaryop to enumify", GB0) ;
     GrB_Type atype = (A == NULL) ? NULL : A->type ;
     GrB_Type btype = (B == NULL) ? NULL : B->type ;
-    GrB_Type mtype = (M == NULL || is_kronecker) ? NULL : M->type ;
+    GrB_Type mtype = (M == NULL) ? NULL : M->type ;
 
     //--------------------------------------------------------------------------
     // get the types of X, Y, and Z, and handle the C_iso case, and GB_wait
@@ -119,7 +119,7 @@ void GB_enumify_ewise       // enumerate a GrB_eWise problem
     bool A_is_pattern = false ;
     bool B_is_pattern = false ;
 
-    if (is_eWiseMult || is_eWiseUnion || is_kronecker)
+    if (is_eWiseMult || is_eWiseUnion)
     { 
         A_is_pattern = (xcode == 0) ;   // A is not needed if x is not used
         B_is_pattern = (ycode == 0) ;   // B is not needed if y is not used
@@ -159,7 +159,7 @@ void GB_enumify_ewise       // enumerate a GrB_eWise problem
     // enumify the sparsity structures of C, M, A, and B
     //--------------------------------------------------------------------------
 
-    int M_sparsity = (M == NULL || is_kronecker) ? 0 : GB_sparsity (M) ;
+    int M_sparsity = (M == NULL) ? 0 : GB_sparsity (M) ;
     int A_sparsity = (A == NULL) ? 0 : GB_sparsity (A) ;
     int B_sparsity = (B == NULL) ? 0 : GB_sparsity (B) ;
 
@@ -173,9 +173,9 @@ void GB_enumify_ewise       // enumerate a GrB_eWise problem
     int cj_is_32 = (Cj_is_32) ? 1 : 0 ;
     int ci_is_32 = (Ci_is_32) ? 1 : 0 ;
 
-    int mp_is_32 = (M == NULL || is_kronecker) ? 0 : (M->p_is_32) ? 1 : 0 ;
-    int mj_is_32 = (M == NULL || is_kronecker) ? 0 : (M->j_is_32) ? 1 : 0 ;
-    int mi_is_32 = (M == NULL || is_kronecker) ? 0 : (M->i_is_32) ? 1 : 0 ;
+    int mp_is_32 = (M == NULL) ? 0 : (M->p_is_32) ? 1 : 0 ;
+    int mj_is_32 = (M == NULL) ? 0 : (M->j_is_32) ? 1 : 0 ;
+    int mi_is_32 = (M == NULL) ? 0 : (M->i_is_32) ? 1 : 0 ;
 
     int ap_is_32 = (A == NULL) ? 0 : (A->p_is_32) ? 1 : 0 ;
     int aj_is_32 = (A == NULL) ? 0 : (A->j_is_32) ? 1 : 0 ;

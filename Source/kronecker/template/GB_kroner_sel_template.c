@@ -33,6 +33,7 @@
 
     GB_Cp_DECLARE (Cp,      ) ; GB_Cp_PTR (Cp, C) ;
     GB_Ch_DECLARE (Ch,      ) ; GB_Ch_PTR (Ch, C) ;
+    const int64_t cvlen = C->vlen ;
     const int64_t cnvec = anvec * bnvec ;
     #define CX_PTR(Cx, pC) ((void *)((Cx) + (pC)))
     #else
@@ -66,8 +67,8 @@
 
         // get C(:,jC), the (kC)th vector of C
         #ifdef GB_JIT_KERNEL
-        int64_t pC = ((int64_t*)C->p)[kC];
-        int64_t pC_end = ((int64_t*)C->p)[kC+1];
+        int64_t pC = GBp_C (Cp, kC, cvlen) ;
+        int64_t pC_end = GBp_C (Cp, kC+1, cvlen) ;
         #else
         int64_t pC     = P_PTR [kC] ;
         int64_t pC_end = P_PTR [kC+1] ;
