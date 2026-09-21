@@ -189,9 +189,13 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     int64_t nvec_nonempty = 0 ;
     
     int64_t *restrict p = NULL ;
-    int64_t *restrict h = NULL ;
-    int64_t *restrict hp = NULL ;
-    size_t p_size, h_size = 0, hp_size = 0 ;
+    size_t p_size = 0 ;
+
+    int32_t *h32 = NULL, *hp32 = NULL ;
+    int64_t *h64 = NULL, *hp64 = NULL ;
+
+    size_t h_size = 0, hp_size = 0 ;
+    bool Cp_is_32, Cj_is_32, Ci_is_32 ;
     
     if (sel != NULL && (!C_iso || sel_is_positional))
     { 
@@ -362,19 +366,54 @@ GrB_Info GB_kroner                  // C = kron (A,B)
             p = (int64_t *) C_stub->p ;
         }
 
-        GB_cumsum (p, false, cnvec, NULL, nthreads, Werk) ;
+        GB_cumsum (p, false, cnvec, &nvec_nonempty, nthreads, Werk) ;
 
-        if (!(C_is_full = (C_is_full && cnz == cnzmax) ))
+        cnz = p[cnvec];
+
+        C_is_full = C_is_full && (cnz == cnzmax) ;
+
+        C_sparsity = C_is_full ? GxB_FULL : (C_is_hyper ? GxB_HYPERSPARSE : GxB_SPARSE) ;
+
+        GB_determine_pji_is_32 (&Cp_is_32, &Cj_is_32, &Ci_is_32,
+            C_sparsity, cnz, (int64_t) cvlen, (int64_t) cvdim, Werk) ;
+
+        if (!C_is_full)
         { 
             if (C_is_hyper)
             { 
-                h = GB_MALLOC_MEMORY (cnvec, sizeof(int64_t), &(h_size)) ;
-                hp = GB_MALLOC_MEMORY (cnvec, sizeof(int64_t), &(hp_size)) ;
-                ASSERT (h_size == GB_Global_memtable_size (h) && hp_size == GB_Global_memtable_size (hp)) ;
-                GB_memset (h, 0, h_size, nthreads) ;
-                GB_memset (hp, 0, hp_size, nthreads) ;
+                if (Cj_is_32)
+                {
+                    h32 = GB_MALLOC_MEMORY (nvec_nonempty, sizeof (uint32_t), &h_size) ;
+                }
+                else
+                {
+                    h64 = GB_MALLOC_MEMORY (nvec_nonempty, sizeof (uint64_t), &h_size) ;
+                }
+
+                if (Cp_is_32)
+                {
+                    hp32 = GB_MALLOC_MEMORY (nvec_nonempty + 1, sizeof (uint32_t), &hp_size) ;
+                    hp32 [0] = 0 ;
+                }
+                else
+                {
+                    hp64 = GB_MALLOC_MEMORY (nvec_nonempty + 1, sizeof (uint64_t), &hp_size) ;
+                    hp64 [0] = 0 ;
+                }
+
+                void *h_ptr = Cj_is_32 ?
+                (void *) h32 : (void *) h64 ;
+
+                void *hp_ptr = Cp_is_32 ? (void *) hp32 : (void *) hp64 ;
+
+                ASSERT (h_size == GB_Global_memtable_size (h_ptr)) ;
+                ASSERT (hp_size == GB_Global_memtable_size (hp_ptr)) ;
+                
+                nvec_nonempty = 0 ;
+                
                 for (kC = 0 ; kC < cnvec ; kC++)
                 { 
+                   
                     if (p [kC + 1] > p [kC])
                     { 
                         int64_t kA = kC / bnvec ;
@@ -382,15 +421,26 @@ GrB_Info GB_kroner                  // C = kron (A,B)
                         const int64_t jA = GBh_A (Ah, kA) ;
                         const int64_t jB = GBh_B (Bh, kB) ;
 
-                        h [nvec_nonempty++] = jA * bvdim + jB ;
-                        hp [nvec_nonempty] = p [kC + 1] ;
+                        if (Cj_is_32)
+                        {
+                            h32 [nvec_nonempty++] = (uint32_t) jA * bvdim + jB ;
+                        }
+                        else
+                        {
+                            h64 [nvec_nonempty++] = (uint64_t) jA * bvdim + jB ;
+                        }
+
+                        if (Cp_is_32)
+                        {
+                            hp32 [nvec_nonempty] = (uint32_t) p [kC + 1] ;
+                        }
+                        else
+                        {
+                            hp64 [nvec_nonempty] = (uint64_t) p [kC + 1] ;
+                        }
                     }
                 }
-                cnz = hp[nvec_nonempty] ;
-            }
-            else
-            {
-                cnz = p[cnvec];
+                cnz = Cp_is_32 ? hp32 [nvec_nonempty] : hp64 [nvec_nonempty] ;
             }
         }
     }
@@ -426,9 +476,12 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
     // determine the p_is_32, j_is_32, and i_is_32 settings for the new matrix
 
-    bool Cp_is_32, Cj_is_32, Ci_is_32 ;
-    GB_determine_pji_is_32 (&Cp_is_32, &Cj_is_32, &Ci_is_32,
-        C_sparsity, cnz, (int64_t) cvlen, (int64_t) cvdim, Werk) ;
+    if (sel == NULL || C_iso)
+    {
+        GB_determine_pji_is_32 (&Cp_is_32, &Cj_is_32, &Ci_is_32,
+            C_sparsity, cnz, (int64_t) cvlen, (int64_t) cvdim, Werk) ;
+    }
+
 
     // C_is_hyper special case: allocate only nvec_nonempty vectors
     int64_t final_nvec = (C_is_hyper && !C_iso && sel != NULL) ? nvec_nonempty : cnvec ;
@@ -438,16 +491,28 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         final_nvec = 0 ;
     }
     
+    // reuse the precomputed p/h arrays for selected results if use_working_arrays == true
+    bool use_working_arrays = (sel != NULL && !C_iso && !C_is_full && cnz > 0) ;
+
     GB_OK (GB_new_bix (&C, // full, sparse, or hyper; existing header
-        ctype, (int64_t) cvlen, (int64_t) cvdim, GB_ph_malloc, C_is_csc,
+        ctype, (int64_t) cvlen, (int64_t) cvdim, use_working_arrays ? GB_ph_null : GB_ph_malloc, C_is_csc,
         C_sparsity, true, B->hyper_switch, final_nvec, cnz, true, C_iso,
-        Cp_is_32, Cj_is_32, Ci_is_32)) ;
+        Cp_is_32, Cj_is_32, Ci_is_32)) ;    
+
     
     // quick return if C is empty
     if (cnz == 0 && C_iso)
     {
         C->magic = GB_MAGIC ;
         GB_FREE_WORKSPACE ;
+        if (C->p != p)
+        {
+            GB_FREE_MEMORY (&p, p_size) ;
+        }
+        GB_FREE_MEMORY (&h32, h_size) ;
+        GB_FREE_MEMORY (&h64, h_size) ;
+        GB_FREE_MEMORY (&hp32, hp_size) ;
+        GB_FREE_MEMORY (&hp64, hp_size) ;
         return (GrB_SUCCESS) ;
     }
 
@@ -465,29 +530,43 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         { 
             if (C_is_hyper)
             { 
+                C->h = Cj_is_32 ? (void *) h32 : (void *) h64 ;
+
+                C->p = Cp_is_32 ? (void *) hp32 : (void *) hp64 ;
+
+                C->h_size = h_size ;
+                C->p_size = hp_size ;
+
+                C->j_is_32 = Cj_is_32 ;
+                C->p_is_32 = Cp_is_32 ;
+                
                 C->nvec = nvec_nonempty ;
+                C->plen = nvec_nonempty ;
+
                 GB_nvec_nonempty_set (C, nvec_nonempty) ;
 
-                for (int64_t i = 0; i < nvec_nonempty; i++) 
-                { 
-                    GB_ISET (Ch, i, h[i]) ; 
-                }
-                GB_FREE_MEMORY (&h, h_size) ;
+                C->nvals = cnz ;
 
-                for (int64_t i = 0; i <= nvec_nonempty; i++) 
-                { 
-                    GB_ISET (Cp, i, hp[i]) ;
-                }
-                C->nvals = GB_IGET (Cp, nvec_nonempty) ;
-                GB_FREE_MEMORY (&hp, hp_size) ;
+                h32 = NULL ;
+                h64 = NULL ;
+                hp32 = NULL ;
+                hp64 = NULL ;
+
+                h_size = 0 ;
+                hp_size = 0 ;
             }
             else
             { 
-                for (int64_t i = 0; i <= cnvec; i++) 
-                { 
-                    GB_ISET (Cp, i, p[i]) ;
-                }
-                C->nvals = GB_IGET (Cp, cnvec) ;
+                C->p = p ;
+                C->p_size = p_size ;
+                C->p_is_32 = false ;
+
+                C->nvec = cnvec ;
+                C->plen = cnvec ;
+
+                C->nvals = cnz ;
+
+                GB_nvec_nonempty_set (C, nvec_nonempty) ;
             }
         }
         else if (cnz > 0)
@@ -527,7 +606,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     }
     
     C->magic = GB_MAGIC ;
-
+    
     //--------------------------------------------------------------------------
     // C = kron (A,B) where C is iso and/or full
     //--------------------------------------------------------------------------
@@ -540,10 +619,15 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         { 
             // no more work to do if C is iso and full
             ASSERT_MATRIX_OK (C, "C=kron(A,B), iso full", GB0) ;
-            GB_FREE_MEMORY (&p, p_size) ;
-            GB_FREE_MEMORY (&h, h_size) ;
-            GB_FREE_MEMORY (&hp, hp_size) ;
             GB_FREE_WORKSPACE ;
+            if (C->p != p)
+            {
+                GB_FREE_MEMORY (&p, p_size) ;
+            }
+            GB_FREE_MEMORY (&h32, h_size) ;
+            GB_FREE_MEMORY (&h64, h_size) ;
+            GB_FREE_MEMORY (&hp32, hp_size) ;
+            GB_FREE_MEMORY (&hp64, hp_size) ;
             return (GrB_SUCCESS) ;
         }
     }
@@ -555,10 +639,15 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     cnz = GB_nnz (C) ;
     if (cnz == 0)
     { 
-        GB_FREE_MEMORY(&p, p_size) ;
-        GB_FREE_MEMORY(&h, h_size) ;
-        GB_FREE_MEMORY(&hp, hp_size) ;
         GB_FREE_WORKSPACE ;
+        if (C->p != p)
+        {
+            GB_FREE_MEMORY (&p, p_size) ;
+        }
+        GB_FREE_MEMORY (&h32, h_size) ;
+        GB_FREE_MEMORY (&h64, h_size) ;
+        GB_FREE_MEMORY (&hp32, hp_size) ;
+        GB_FREE_MEMORY (&hp64, hp_size) ;
         return (GrB_SUCCESS) ;
     }
 
@@ -570,7 +659,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     // all vectors 0..cnvec-1
     void *temporary_p = C->p ;
     bool temporary_p_is_32 = C->p_is_32 ;
-    if (sel != NULL && !C_iso)
+    if (sel != NULL && !C_iso && C_is_hyper)
     {
         C->p = p ;
         C->p_is_32 = false ;
@@ -705,11 +794,23 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         info = GrB_SUCCESS ;
     }
     
-    if (sel != NULL)
-    { 
-        GB_FREE_MEMORY (&p, p_size) ;
-        GB_FREE_MEMORY (&h, h_size) ;
-        GB_FREE_MEMORY (&hp, hp_size) ;
+    if (sel != NULL && !C_iso && !C_is_hyper && Cp_is_32)
+    {
+        uint8_t *raw = (uint8_t *) p ;
+
+        for (int64_t k = 0 ; k <= C->nvec ; k++)
+        {
+            uint32_t value = (uint32_t) p [k] ;
+
+            memcpy (raw + (size_t) k * sizeof (uint32_t), &value, sizeof (uint32_t)) ;
+        }
+
+        bool ok = true ;
+        size_t actually_allocated = sizeof(uint64_t) * C->nvec ;
+
+        GB_REALLOC_MEMORY(p, (size_t) C->nvec, sizeof (uint32_t), &actually_allocated, &ok) ;
+        C->p = p ;
+        C->p_is_32 = true ;
     }
     
     //--------------------------------------------------------------------------
@@ -726,6 +827,14 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     // return result
     //--------------------------------------------------------------------------
 
+    if (C->p != p)
+    {
+        GB_FREE_MEMORY (&p, p_size) ;
+    }
+    GB_FREE_MEMORY (&h32, h_size) ;
+    GB_FREE_MEMORY (&h64, h_size) ;
+    GB_FREE_MEMORY (&hp32, hp_size) ;
+    GB_FREE_MEMORY (&hp64, hp_size) ;
     GB_FREE_WORKSPACE ;
     return (info) ;
 }
