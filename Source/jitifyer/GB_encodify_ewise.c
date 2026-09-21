@@ -64,7 +64,7 @@ uint64_t GB_encodify_ewise      // encode an ewise problem
     GB_encodify_kcode (encoding, kcode) ;
     GB_enumify_ewise (&encoding->code, is_eWiseMult, is_eWiseUnion, is_kron,
         is_eWiseAdd, C_iso, C_in_iso, C_sparsity, ctype,
-        Cp_is_32, Cj_is_32, Ci_is_32, (is_kron) ? NULL : M,
+        Cp_is_32, Cj_is_32, Ci_is_32, M,
         Mask_struct, Mask_comp, binaryop, flipij, flipxy, A, B) ;
 
     //--------------------------------------------------------------------------
@@ -81,14 +81,6 @@ uint64_t GB_encodify_ewise      // encode an ewise problem
     //--------------------------------------------------------------------------
 
     hash = hash ^ GB_jitifyer_hash_encoding (encoding) ;
-    if (is_kron && M != NULL)
-    {
-        // Mask_comp contains a selector flag for Kronecker product
-        hash ^= UINT64_C (1) ;
-
-        const uint64_t sel_code = (uint64_t) M ;
-        hash ^= sel_code ;
-    }
 
     return ((hash == 0 || hash == UINT64_MAX) ? GB_MAGIC : hash) ;
 }

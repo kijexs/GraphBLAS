@@ -45,8 +45,13 @@ GrB_Info GB_kroner_jit
         GB_JIT_KERNEL_KRONER, /* is_ewisemult: */ false, /* C_iso: */ C->iso,
         /* C_in_iso: */ false, C_sparsity, C->type,
         C->p_is_32, C->j_is_32, C->i_is_32,
-        /* M: */ (opcode_sel == GB_NOP_code) ? NULL : (GrB_Matrix) opcode_sel, true, false, binaryop, flipij, flipij_sel, A, B) ;
+        /* M: */ NULL, true, false, binaryop, flipij, false, A, B) ;
 
+    if (select != NULL)
+    {
+        hash ^= opcode_sel ;
+    }
+        
     //--------------------------------------------------------------------------
     // get the kernel function pointer, loading or compiling it if needed
     //--------------------------------------------------------------------------
