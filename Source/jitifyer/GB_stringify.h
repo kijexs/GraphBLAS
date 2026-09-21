@@ -1839,7 +1839,6 @@ GrB_Info GB_kroner_jit
     const GrB_IndexUnaryOp select,
     const GB_void *y,
     const bool flipij,
-    const bool flipij_sel,
     const GrB_Matrix A,
     const GrB_Matrix B,
     const int nthreads

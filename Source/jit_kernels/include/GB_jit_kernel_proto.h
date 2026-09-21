@@ -732,7 +732,6 @@ GrB_Info GB_jit_kernel_kroner                                           \
     const void *theta,                                                  \
     const GrB_IndexUnaryOp select,                                      \
     const GB_void *y,                                                   \
-    const bool flipij_sel,                                              \
     const GB_callback_struct *restrict my_callback                      \
 )
 

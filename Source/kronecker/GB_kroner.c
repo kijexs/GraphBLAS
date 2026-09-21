@@ -214,7 +214,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         C_stub->p = p ;
         C_stub->nvec = 0 ;
         // via the JIT kernel
-        info = GB_kroner_jit (C_stub, op, select, y, flipij, flipij_sel, A, B, nthreads) ;
+        info = GB_kroner_jit (C_stub, op, select, y, flipij, A, B, nthreads) ;
 
         if (info == GrB_NO_VALUE)
         { 
@@ -666,7 +666,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     }
     
     // via the JIT kernel
-    info = GB_kroner_jit (C, op, select, y, flipij, flipij_sel, A, B, nthreads) ;
+    info = GB_kroner_jit (C, op, select, y, flipij, A, B, nthreads) ;
 
     C->p = temporary_p ;
     C->p_is_32 = temporary_p_is_32 ;
