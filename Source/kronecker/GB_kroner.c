@@ -805,12 +805,14 @@ GrB_Info GB_kroner                  // C = kron (A,B)
             memcpy (raw + (size_t) k * sizeof (uint32_t), &value, sizeof (uint32_t)) ;
         }
 
-        bool ok = true ;
-        size_t actually_allocated = sizeof(uint64_t) * C->nvec ;
+        bool realloc_ok = false ;
 
-        GB_REALLOC_MEMORY(p, (size_t) C->nvec, sizeof (uint32_t), &actually_allocated, &ok) ;
+        GB_REALLOC_MEMORY(p, (size_t) C->nvec + 1, sizeof (uint32_t), &p_size, &realloc_ok) ;
+        ASSERT (realloc_ok) ;
+        
         C->p = p ;
         C->p_is_32 = true ;
+        C->p_size = p_size ;
     }
     
     //--------------------------------------------------------------------------
