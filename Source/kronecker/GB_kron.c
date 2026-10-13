@@ -59,10 +59,44 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     GrB_Matrix T = NULL, AT = NULL, BT = NULL ;
     GrB_BinaryOp op = op_in ;
     GrB_IndexUnaryOp sel = sel_in ;
-    GB_Type_code xcode = (op->xtype == NULL) ? GB_ignore_code : op->xtype->code;
 
     GB_RETURN_IF_NULL_OR_FAULTY (op) ;
     GB_RETURN_IF_FAULTY_OR_POSITIONAL (accum) ;
+
+    if (sel != NULL)
+    {
+        GB_RETURN_IF_NULL_OR_FAULTY (sel) ;
+        GB_RETURN_IF_NULL_OR_INVALID (Thunk) ;
+        GB_MATRIX_WAIT (Thunk) ;
+        if (GB_nnz ((GrB_Matrix) Thunk) == 0)
+        {
+            GB_ERROR (GrB_EMPTY_OBJECT,
+                "Thunk for Kronecker selector [%s] cannot be empty", sel->name) ;
+        }
+        if (!GB_Type_compatible (op->ztype, sel->xtype))
+        {
+            GB_ERROR (GrB_DOMAIN_MISMATCH,
+                "Incompatible type for Kronecker:\n"
+                "selector input type [%s]\n"
+                "cannot be typecast to operator Kronecker result type [%s]",
+                op->ztype->name, sel->xtype->name) ;
+        }
+        if (!GB_Type_compatible (GrB_BOOL, sel->ztype))
+        {
+            GB_ERROR (GrB_DOMAIN_MISMATCH,
+                "Output of user-defined IndexUnaryOp [%s] is [%s]\n"
+                "which cannot be typecasted to bool\n",
+                sel->name, sel->ztype->name) ;
+        }
+        if (!GB_Type_compatible (Thunk->type, sel->ytype))
+        {
+            GB_ERROR (GrB_DOMAIN_MISMATCH,
+                "Incompatible type for Kronecker:\n"
+                "Kronecker Thunk type [%s] and selector scalar type [%s]"
+                " not compatible",
+                Thunk->type->name, sel->ytype->name) ;
+        }
+    }
 
     ASSERT_MATRIX_OK (C, "C input for GB_kron", GB0) ;
     ASSERT_MATRIX_OK_OR_NULL (M, "M for GB_kron", GB0) ;
@@ -128,12 +162,13 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     // do not flipij the builtin positional ops (FIRSTI, and friends);
     // this is no longer needed with the new index binary ops.
     bool flipij = (!T_is_csc) ;
+    bool flipij_sel = flipij ;
 
     GB_Opcode opcode_sel = (sel == NULL) ? GB_NOP_code : sel->opcode ;
 
     bool negate_thunk = false ;
 
-    if (flipij && GB_IS_INDEXUNARYOP_CODE_POSITIONAL (opcode_sel))
+    if (flipij_sel && GB_IS_INDEXUNARYOP_CODE_POSITIONAL (opcode_sel))
     { 
 
         //----------------------------------------------------------------------
@@ -168,15 +203,15 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
             // ROWINDEX becomes COLINDEX
             case GB_ROWINDEX_idxunop_code  : 
                 // i+thunk becomes j+thunk: no change to thunk
-                sel = (xcode == GB_INT32_code) ? GrB_COLINDEX_INT32
-                                              : GrB_COLINDEX_INT64 ;
+                sel = (sel->ztype == GrB_INT32) ? GrB_COLINDEX_INT32
+                                                : GrB_COLINDEX_INT64 ;
                 break ;
 
             // COLINDEX becomes ROWINDEX
             case GB_COLINDEX_idxunop_code  : 
                 // j+thunk becomes i+thunk: no change to thunk
-                sel = (xcode == GB_INT32_code) ? GrB_ROWINDEX_INT32
-                                              : GrB_ROWINDEX_INT64 ;
+                sel = (sel->ztype == GrB_INT32) ? GrB_ROWINDEX_INT32
+                                                : GrB_ROWINDEX_INT64 ;
                 break ;
 
             // COLLE becomes ROWLE
@@ -205,8 +240,19 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
 
             default:;
         }
+
+        // flipij_sel is now false for any positional operator
+        flipij_sel = false ;
     }
     
+    if (sel != NULL && opcode_sel != GB_USER_idxunop_code)
+    { 
+        // flipij can still be true but is only needed for if the
+        // GrB_IndexUnaryOp is user-defined.  So set here it to false for all
+        // but user-defined ops.
+        flipij_sel = false ;
+    }
+
     //--------------------------------------------------------------------------
     // negate the Thunk if needed
     //--------------------------------------------------------------------------
@@ -257,7 +303,7 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     GB_CLEAR_MATRIX_HEADER (T, &T_header) ;
     GB_OK (GB_kroner (T, T_is_csc, op, flipij,
         A_transpose ? AT : A, A_is_pattern,
-        B_transpose ? BT : B, B_is_pattern, sel, Thunk2, Werk)) ;
+        B_transpose ? BT : B, B_is_pattern, sel, flipij_sel, Thunk2, Werk)) ;
 
     GB_FREE_WORKSPACE ;
     ASSERT_MATRIX_OK (T, "T = kron(A,B)", GB0) ;
@@ -269,4 +315,3 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     return (GB_accum_mask (C, M, NULL, accum, &T, C_replace, Mask_comp,
         Mask_struct, Werk)) ;
 }
-

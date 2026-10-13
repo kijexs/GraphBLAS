@@ -7,7 +7,7 @@
 
 //------------------------------------------------------------------------------
 
-// First pass of the Kronecker product: count the number of non-zero entries
+// First pass of the Kronecker product: count the entries retained
 // in C.
 //
 // C = kron(A,B) where op determines the binary multiplier to use.  The type of
@@ -34,7 +34,8 @@
     const int64_t bnvec = B->nvec ;
     const int64_t bvdim = B->vdim ;
 
-    #define P_PTR              ((int64_t *) (C)->p)
+    #define P_PTR (C->p)
+    #define P_IS_32 (C->p_is_32)
     const int64_t cnvec = anvec * bnvec ;
     const int64_t csize = C->type->size ;
     #endif
@@ -47,7 +48,7 @@
     const GB_B_TYPE *restrict Bx = (GB_B_TYPE *) B->x ;
 
     //--------------------------------------------------------------------------
-    // C = kron (A,B): count non-zeros in C
+    // C = kron (A,B):count selected entries
     //--------------------------------------------------------------------------
 
     #pragma omp parallel for num_threads(nthreads) schedule(guided)
@@ -124,7 +125,7 @@
                 }
                 
                 //--------------------------------------------------------------
-                // check if C(iC,jC) should be counted as non-zero
+                // check if C(iC,jC) should be retained
                 //--------------------------------------------------------------
                 
                 int64_t iC = iAblock + iB ;
@@ -132,12 +133,19 @@
 
                 // user-defined selector: call the function 
                 // to check the value
-                bool result = false ;
-                sel (&result, cwork_ptr, iC, jC, y) ;
+                
+                GB_TEST_KRON_VALUE_OF_ENTRY (result, cwork_ptr) ;
                 
                 if (result)
                 { 
-                    P_PTR [kC]++ ;
+                    if (P_IS_32)
+                    {
+                        ((uint32_t *) P_PTR) [kC]++ ;
+                    }
+                    else
+                    {
+                        ((uint64_t *) P_PTR) [kC]++ ;
+                    }
                 }
             }
         }

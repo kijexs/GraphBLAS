@@ -33,8 +33,8 @@
 
     GB_Cp_DECLARE (Cp,      ) ; GB_Cp_PTR (Cp, C) ;
     GB_Ch_DECLARE (Ch,      ) ; GB_Ch_PTR (Ch, C) ;
+    const int64_t cvlen = C->vlen ;
     const int64_t cnvec = anvec * bnvec ;
-    const int64_t csize = C->type->size ;
     #define CX_PTR(Cx, pC) ((void *)((Cx) + (pC)))
     #else
     #define CX_PTR(Cx, pC) ((void *)((Cx) + (pC)*csize))
@@ -67,11 +67,15 @@
 
         // get C(:,jC), the (kC)th vector of C
         #ifdef GB_JIT_KERNEL
-        int64_t pC = ((int64_t*)C->p)[kC];
-        int64_t pC_end = ((int64_t*)C->p)[kC+1];
+        int64_t pC = GBp_C (Cp, kC, cvlen) ;
+        int64_t pC_end = GBp_C (Cp, kC+1, cvlen) ;
         #else
-        int64_t pC     = P_PTR [kC] ;
-        int64_t pC_end = P_PTR [kC+1] ;
+        int64_t pC = C_stub->p_is_32 ?
+            ((const uint32_t *) P_PTR) [kC] :
+            ((const uint64_t *) P_PTR) [kC] ;
+        int64_t pC_end = C_stub->p_is_32 ?
+            ((const uint32_t *) P_PTR) [kC+1] :
+            ((const uint64_t *) P_PTR) [kC+1] ;
         #endif
         
         // get A(:,jA), the (kA)th vector of A
@@ -130,8 +134,8 @@
 
                 // user-defined selector: call the function
                 // to check the value
-                bool result = false ;
-                sel (&result, CX_PTR(Cx, pC), iC, jC, y) ;
+
+                GB_TEST_KRON_VALUE_OF_ENTRY (result, CX_PTR(Cx, pC)) ;
                 
                 if (result)
                 { 
