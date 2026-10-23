@@ -21,7 +21,7 @@ here = pwd ;
 if (ispc)
     here = strrep (here, filesep, '/') ;
 end
-if (isempty (strfind (here, 'GraphBLAS/Test')))
+if (isempty (strfind (here, 'Test')))
     % this function should only be done in GraphBLAS/Test
     error ('testmake should be used in Test directory only') ;
 end
