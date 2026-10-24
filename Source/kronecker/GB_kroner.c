@@ -336,15 +336,15 @@ GrB_Info GB_kroner                  // C = kron (A,B)
                     int64_t pM_start = GBp_M (Mp, k, vlen) ;
                     
                     int64_t pM_end = GBp_M (Mp, k + 1, vlen) ;
-                    for (GrB_Index p = pM_start ; p < pM_end ; p++)
+                    for (GrB_Index pM = pM_start ; pM < pM_end ; pM++)
                     {
-                        if (!GBb_M (Mask->b, p)) continue ;
+                        if (!GBb_M (Mask->b, pM)) continue ;
 
-                        int64_t i = GBi_M (Mi, p, vlen) ;
+                        int64_t i = GBi_M (Mi, pM, vlen) ;
                         GrB_Index Mrow = Mask->is_csc ? i : j ;
                         GrB_Index Mcol = Mask->is_csc ? j : i ;
 
-                        if (Mask_struct || (Mask->iso ? ((bool *) Mask->x) [0] : ((bool *) Mask->x) [p]))
+                        if (Mask_struct || (Mask->iso ? ((bool *) Mask->x) [0] : ((bool *) Mask->x) [pM]))
                         {
                             GrB_Index arow = A_transpose ? (Mcol / bncols)
                                                          : (Mrow / bnrows) ;
@@ -865,7 +865,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     // Borrow p for filling, then restore hp before workspace cleanup
     void *temporary_p = C->p ;
     bool temporary_p_is_32 = C->p_is_32 ;
-    if (p != NULL && !C_iso && C_is_hyper)
+    if (p != NULL && C_is_hyper && (use_mask || !C_iso))
     {
         C->p = p ;
         C->p_is_32 = C_stub->p_is_32 ;
