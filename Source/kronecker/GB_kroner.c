@@ -328,7 +328,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
             {
                 GrB_Index offset ;
                 
-                #pragma omp parallel for schedule(static)
+                #pragma omp for schedule(static)
                 for (GrB_Index k = 0 ; k < work_nvec ; k++)
                 {
                     GrB_Index j = GBh_M (Mh, k) ;
