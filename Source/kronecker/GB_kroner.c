@@ -643,7 +643,6 @@ GrB_Info GB_kroner                  // C = kron (A,B)
                         uint64_t jC ;
                         if (use_mask)
                         {
-                            GB_Mh_DECLARE (Mh, const) ; GB_Mh_PTR (Mh, Mask) ;
                             jC = GBh_M (Mh, kC) ;
                         }
                         else
