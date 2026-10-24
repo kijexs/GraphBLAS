@@ -150,7 +150,7 @@ logstat ('test386'    ,t, J40  , F00  , [0 1 2 4]) ; % kron with index binop and
 %logstat ('test213'    ,t, J40  , F10  ) ; % iso assign (method 05d)
 %logstat ('test216'    ,t, J4   , F1   ) ; % C<A>=A, iso case
 %logstat ('test225'    ,t, J40  , F10  ) ; % mask operations (GB_masker)
-%logstat ('test226'    ,t, J40  , F10  ) ; % kron with iso matrices
+logstat ('test226'    ,t, J40  , F10  ) ; % kron with iso matrices
 logstat ('test326'    ,t, J40  , F10  ) ; % kron with iso matrices and selector
 %logstat ('test235'    ,t, J40  , F10  ) ; % GxB_eWiseUnion, GrB_eWiseAdd
 %logstat ('test252'    ,t, J4   , F1   ) ; % basic tests
@@ -331,7 +331,7 @@ logstat ('test320'    ,t, J4   , F1   ) ; % mask C<M>=Z, iso case, kron, selecto
 %logstat ('test232'    ,t, J40  , F10  ) ; % assign with GrB_Scalar
 %logstat ('test142b'   ,t, J40  , F00  ) ; % GrB_assign with accum
 %logstat ('test142'    ,t, J4   , F1   ) ; % GrB_assign with accum
-%logstat ('test227'    ,t, J4   , F1   ) ; % kron
+logstat ('test227'    ,t, J4   , F1   ) ; % kron
 logstat ('test327'    ,t, J4   , F1   ) ; % kron with selector
 %logstat ('test292'    ,t, J4   , F1   ) ; % build_Vector with large vector
 %
