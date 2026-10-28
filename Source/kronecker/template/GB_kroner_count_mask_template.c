@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// GB_kroner_template: Kronecker product, C = kron (A,B)
+// GB_kroner_count_mask_template: Kronecker product, C = kron (A,B)
 //------------------------------------------------------------------------------
 
 // SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2025, All Rights Reserved.
@@ -193,7 +193,7 @@
             // C is iso, so the Kronecker product result is invariant,
             // compute it once
             // the positional selector will still be evaluated per-element below
-            GB_KRONECKER_OP (cwork_ptr, 0, a_elem, 0, 0, b_elem, 0, 0) ;
+            memcpy(cwork_ptr, C->x, csize);
         }
 
         #pragma omp for schedule(static)
@@ -253,7 +253,14 @@
                     // compute C(iC,jC) = A(iA,jA) * B(iB,jB) into a temporary buffer
                     if (!GB_C_ISO)
                     {
-                        GB_KRONECKER_OP (cwork_ptr, 0, a_elem, ix, jx, b_elem, iy, jy) ;
+                        // if (flipij)
+                        // {
+                        //     GB_KRONECKER_OP (cwork_ptr, 0, a_elem, jx, ix, b_elem, jy, iy) ;
+                        // }
+                        // else
+                        // {
+                            GB_KRONECKER_OP (cwork_ptr, 0, a_elem, ix, jx, b_elem, iy, jy) ;
+                        // }
                     }
                     
                     //--------------------------------------------------------------

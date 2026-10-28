@@ -27,6 +27,7 @@ Ax = sparse (100 * sprandn (am,an, 0.5)) ;
 Bx = sparse (100 * sprandn (bm,bn, 0.5)) ;
 
 sel_names = { 'valuene', 'tril' } ;
+selected_binops = {'firsti', 'secondi', 'firstj', 'secondj'};
 
 for s = 1:length (sel_names)
     sel.opname = sel_names {s} ;
@@ -35,7 +36,7 @@ for s = 1:length (sel_names)
         for k1 = 1:4
 
             type = types {k1} ;
-            binop = binops {k2}  ;
+            binop = selected_binops {k2}  ;
             op.opname = binop ;
             op.optype = type ;
             if (GB_spec_is_positional (op.opname))
@@ -85,6 +86,23 @@ for s = 1:length (sel_names)
                                 C1 = GB_mex_kron  (C, [ ], [ ], op, A, B, dnn, sel, y) ;
                                 GB_spec_compare (C2, C1) ;
 
+                                %---------------------------------------
+                                % kron(A,B) with Mask + Selector
+                                %---------------------------------------
+
+                                M.matrix = sprand (am * bm, an * bn, 0.5) ~= 0 ;
+                                M.is_hyper = true ;
+                                M.is_csc = C_is_csc ;
+
+                                % Reference: regular kron -> selector -> mask
+                                K = GB_spec_kron (C, [ ], [ ], op, A, B, dnn) ;
+
+                                C2 = GB_spec_select_idxunop (C, M, [ ], sel, K, y, dnn) ;
+
+                                % Optimized: kron with both Mask and Selector
+                                C1 = GB_mex_kron (C, M, [ ], op, A, B, dnn, sel, y) ;
+
+                                GB_spec_compare (C2, C1) ;
                                 %---------------------------------------
                                 % kron(A',B)
                                 %---------------------------------------

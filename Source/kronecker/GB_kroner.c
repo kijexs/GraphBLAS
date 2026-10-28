@@ -262,6 +262,12 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     ok = ok & GB_int64_multiply (&cnzmax, anz, bnz) ;
     ok = ok & GB_int64_multiply (&cnvec, anvec, bnvec) ;
     ASSERT (ok) ;
+
+    if (use_mask)
+    {
+        cvlen = Mask->vlen;
+        cvdim = Mask->vdim;
+    }
     work_nvec = use_mask ? Mask->nvec : (int64_t) cnvec ;
 
     // A hypersparse mask already enumerates just the physical vectors needed.
@@ -688,7 +694,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     C_iso = C_iso && !sel_is_positional ;
     if (C_iso)
     { 
-        if (sel != NULL && !use_mask)
+        if (sel != NULL)
         {
             bool result = false ;
             sel (&result, cscalar, 0, 0, y) ;
@@ -729,6 +735,35 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     // reuse the precomputed p/h arrays for selected results if use_working_arrays == true
     bool use_working_arrays = (need_count && !C_is_full && cnz > 0) ;
 
+    if (use_mask) {
+        fprintf(stderr,
+            "A: vlen=%lld vdim=%lld csc=%d\n"
+            "B: vlen=%lld vdim=%lld csc=%d\n"
+            "M: vlen=%lld vdim=%lld csc=%d\n"
+            "C: vlen=%llu vdim=%llu csc=%d\n",
+            (long long) A->vlen,
+            (long long) A->vdim, A->is_csc,
+            (long long) B->vlen,
+            (long long) B->vdim, B->is_csc,
+            (long long) Mask->vlen,
+            (long long) Mask->vdim, Mask->is_csc,
+            (unsigned long long) cvlen,
+            (unsigned long long) cvdim, C_is_csc
+        );
+    }
+    else {
+        fprintf(stderr,
+            "A: vlen=%lld vdim=%lld csc=%d\n"
+            "B: vlen=%lld vdim=%lld csc=%d\n"
+            "C: vlen=%llu vdim=%llu csc=%d\n",
+            (long long) A->vlen,
+            (long long) A->vdim, A->is_csc,
+            (long long) B->vlen,
+            (long long) B->vdim, B->is_csc,
+            (unsigned long long) cvlen,
+            (unsigned long long) cvdim, C_is_csc
+        );
+    }
     GB_OK (GB_new_bix (&C, // full, sparse, or hyper; existing header
         ctype, (int64_t) cvlen, (int64_t) cvdim, use_working_arrays ? GB_ph_null : GB_ph_malloc, C_is_csc,
         C_sparsity, true, B->hyper_switch, final_nvec, cnz, true, C_iso,
@@ -852,6 +887,20 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     cnz = GB_nnz (C) ;
     if (cnz == 0)
     { 
+        fprintf (stderr,
+            "\n[kron empty] C=%p format=%s sparsity_control=%d iso=%d"
+            " vlen=%lld vdim=%lld nvals=%lld nvec=%lld plen=%lld"
+            "\n  p=%p h=%p i=%p x=%p\n",
+            (void *) C,
+            C->b != NULL ? "bitmap" :
+            C->h != NULL ? "hyper" :
+            C->p != NULL ? "sparse" : "full",
+            (int) C->sparsity_control, (int) C->iso,
+            (long long) C->vlen, (long long) C->vdim,
+            (long long) C->nvals, (long long) C->nvec, (long long) C->plen,
+            C->p, C->h, C->i, C->x) ;
+        fflush (stderr) ;
+
         GB_FREE_WORKSPACE ;
         return (GrB_SUCCESS) ;
     }

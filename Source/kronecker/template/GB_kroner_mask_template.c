@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// GB_kroner_template: Kronecker product, C = kron (A,B)
+// GB_kroner_mask_template: Kronecker product, C = kron (A,B)
 //------------------------------------------------------------------------------
 
 // SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2025, All Rights Reserved.
@@ -262,7 +262,16 @@
                     jy = B_transpose ? brow : bcol ;
 
                     // compute C(iC,jC) = A(iA,jA) * B(iB,jB) into a temporary buffer
-                    GB_KRONECKER_OP (Cx, pC, a_elem, ix, jx, b_elem, iy, jy) ;
+                    if (!GB_C_ISO) {
+                        // if (flipij)
+                        // {
+                        //     GB_KRONECKER_OP (Cx, pC, a_elem, jx, ix, b_elem, jy, iy) ;
+                        // }
+                        // else 
+                        // {
+                            GB_KRONECKER_OP (Cx, pC, a_elem, ix, jx, b_elem, iy, jy) ;
+                        // }
+                    }
                     
                     //--------------------------------------------------------------
                     // check if C(iC,jC) should be retained
@@ -275,7 +284,7 @@
                     // to check the value
                     
                     #ifdef GB_HAS_SELECTOR
-                        GB_TEST_KRON_VALUE_OF_ENTRY (result, CX_PTR(Cx, pC)) ;
+                        GB_TEST_KRON_VALUE_OF_ENTRY (result, CX_PTR(Cx, GB_C_ISO ? 0 : pC)) ;
                         if (!result) continue;
                     #endif
                     

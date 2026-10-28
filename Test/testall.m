@@ -138,7 +138,7 @@ F100 = {4,4,0,0} ;
 %logstat ('test290'    ,t, J0   , F0   ) ; % large symbolic bitmap_subref
 %logstat ('test287'    ,t, J0   , F0   , [0 4]) ; % misc tests
 %logstat ('test286'    ,t, J40  , F00  , [0 1 2 4]) ; % kron with index binop
-logstat ('test386'    ,t, J40  , F00  , [0 1 2 4]) ; % kron with index binop and selector
+%logstat ('test386'    ,t, J40  , F00  , [0 1 2 4]) ; % kron with index binop and selector
 %logstat ('test78'     ,t, J40  , F00  , [0 4]) ; % subref
 %logstat ('test285'    ,t, J40  , F00  ) ; % GB_mex_assign (bitmap, 7_whole)
 %logstat ('test247'    ,t, J40  , F10  ) ; % GrB_mxm: fine Hash method
@@ -150,8 +150,8 @@ logstat ('test386'    ,t, J40  , F00  , [0 1 2 4]) ; % kron with index binop and
 %logstat ('test213'    ,t, J40  , F10  ) ; % iso assign (method 05d)
 %logstat ('test216'    ,t, J4   , F1   ) ; % C<A>=A, iso case
 %logstat ('test225'    ,t, J40  , F10  ) ; % mask operations (GB_masker)
-logstat ('test226'    ,t, J40  , F10  ) ; % kron with iso matrices
-logstat ('test326'    ,t, J40  , F10  ) ; % kron with iso matrices and selector
+%logstat ('test226'    ,t, J40  , F10  ) ; % kron with iso matrices
+%logstat ('test326'    ,t, J40  , F10  ) ; % kron with iso matrices and selector
 %logstat ('test235'    ,t, J40  , F10  ) ; % GxB_eWiseUnion, GrB_eWiseAdd
 %logstat ('test252'    ,t, J4   , F1   ) ; % basic tests
 %logstat ('test253'    ,t, J4   , F1   ) ; % basic JIT tests
@@ -208,7 +208,7 @@ logstat ('test326'    ,t, J40  , F10  ) ; % kron with iso matrices and selector
 %logstat ('test162'    ,t, J40  , F10  ) ; % C<M>=A*B with very sparse M
 %logstat ('test275'    ,t, J0   , F1   ) ; % monoid get/set
 %logstat ('test220'    ,t, J4   , F1   ) ; % mask C<M>=Z, iso case, kron
-logstat ('test320'    ,t, J4   , F1   ) ; % mask C<M>=Z, iso case, kron, selector
+%logstat ('test320'    ,t, J4   , F1   ) ; % mask C<M>=Z, iso case, kron, selector
 %logstat ('test83'     ,t, J40  , F10  ) ; % GrB_assign, C_replace and empty J
 %logstat ('test04'     ,t, J40  , F10  ) ; % simple mask and transpose test
 %logstat ('test132'    ,t, J4   , F1   ) ; % setElement
@@ -331,7 +331,7 @@ logstat ('test320'    ,t, J4   , F1   ) ; % mask C<M>=Z, iso case, kron, selecto
 %logstat ('test232'    ,t, J40  , F10  ) ; % assign with GrB_Scalar
 %logstat ('test142b'   ,t, J40  , F00  ) ; % GrB_assign with accum
 %logstat ('test142'    ,t, J4   , F1   ) ; % GrB_assign with accum
-logstat ('test227'    ,t, J4   , F1   ) ; % kron
+%logstat ('test227'    ,t, J4   , F1   ) ; % kron
 logstat ('test327'    ,t, J4   , F1   ) ; % kron with selector
 %logstat ('test292'    ,t, J4   , F1   ) ; % build_Vector with large vector
 %

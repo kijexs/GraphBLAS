@@ -317,7 +317,7 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
         Mask_is_applicable ? B_transpose : false;
 
     GB_CLEAR_MATRIX_HEADER (T, &T_header) ;
-    GB_OK (GB_kroner (T, T_is_csc, op, flipij,
+    GB_OK (GB_kroner (T, T_is_csc, op, Mask_is_applicable ? false : flipij,
         A_kron, A_kron_transpose, A_is_pattern,
         B_kron, B_kron_transpose, B_is_pattern,
         M, Mask_comp, Mask_struct,
