@@ -147,8 +147,8 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     // transpose A and B if requested
     //--------------------------------------------------------------------------
 
-    bool T_is_csc = C->is_csc ;
     const bool Mask_is_applicable = (M != NULL && !Mask_comp);
+    const bool T_is_csc = Mask_is_applicable ? M->is_csc : C->is_csc;
     if (!Mask_is_applicable && T_is_csc != A->is_csc)
     { 
         // Negate A_transpose
@@ -318,12 +318,12 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
 
     GB_CLEAR_MATRIX_HEADER (T, &T_header) ;
     GB_OK (GB_kroner (T, T_is_csc, op, Mask_is_applicable ? false : flipij,
-        A_kron, A_kron_transpose, A_is_pattern,
-        B_kron, B_kron_transpose, B_is_pattern,
+        A_kron, A_is_pattern, A_kron_transpose,
+        B_kron, B_is_pattern, B_kron_transpose,
         M, Mask_comp, Mask_struct,
         sel, flipij_sel, Thunk2, Werk)) ;
 
-    if (Mask_is_applicable && T->is_csc != T_is_csc)
+    if (T->is_csc != C->is_csc)
     {
         info = GB_transpose_in_place(T, T_is_csc, Werk);
 
@@ -341,6 +341,6 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     // C<M> = accum (C,T): accumulate the results into C via the mask
     //--------------------------------------------------------------------------
 
-    return (GB_accum_mask (C, M, NULL, accum, &T, C_replace, Mask_comp,
+    return (GB_accum_mask (C, NULL, NULL, accum, &T, C_replace, Mask_comp,
         Mask_struct, Werk)) ;
 }

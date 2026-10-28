@@ -25,18 +25,17 @@ bn = 2 ;
 
 Ax = sparse (100 * sprandn (am,an, 0.5)) ;
 Bx = sparse (100 * sprandn (bm,bn, 0.5)) ;
-
+selected_binops = {'firsti', 'firstj', 'secondi', 'secondj'};
 sel_names = { 'valuene', 'tril' } ;
-selected_binops = {'firsti', 'secondi', 'firstj', 'secondj'};
 
 for s = 1:length (sel_names)
     sel.opname = sel_names {s} ;
 
-    for k2 = [4 7 45:52 ]
+    for k2 = 1:length(selected_binops)
         for k1 = 1:4
 
             type = types {k1} ;
-            binop = selected_binops {k2}  ;
+            binop = selected_binops{k2};
             op.opname = binop ;
             op.optype = type ;
             if (GB_spec_is_positional (op.opname))
