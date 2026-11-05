@@ -147,13 +147,14 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     // transpose A and B if requested
     //--------------------------------------------------------------------------
 
-    bool T_is_csc = C->is_csc ;
-    if (T_is_csc != A->is_csc)
+    const bool Mask_is_applicable = (M != NULL && !Mask_comp);
+    const bool T_is_csc = Mask_is_applicable ? M->is_csc : C->is_csc;
+    if (!Mask_is_applicable && T_is_csc != A->is_csc)
     { 
         // Negate A_transpose
         A_transpose = !A_transpose ;
     }
-    if (T_is_csc != B->is_csc)
+    if (!Mask_is_applicable && T_is_csc != B->is_csc)
     { 
         // Negate B_transpose
         B_transpose = !B_transpose ;
@@ -276,35 +277,63 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
 
     bool A_is_pattern, B_is_pattern ;
     GB_binop_pattern (&A_is_pattern, &B_is_pattern, false, op->opcode) ;
-    if (A_transpose)
-    { 
-        // AT = A' and typecast to op->xtype
-        GBURBLE ("(A transpose) ") ;
-        GB_CLEAR_MATRIX_HEADER (AT, &AT_header) ;
-        GB_OK (GB_transpose_cast (AT, op->xtype, T_is_csc, A, A_is_pattern,
-            Werk)) ;
-        ASSERT_MATRIX_OK (AT, "AT kron", GB0) ;
-    }
+    if (!Mask_is_applicable)
+    {
+        if (A_transpose)
+        { 
+            // AT = A' and typecast to op->xtype
+            GBURBLE ("(A transpose) ") ;
+            GB_CLEAR_MATRIX_HEADER (AT, &AT_header) ;
+            GB_OK (GB_transpose_cast (AT, op->xtype, T_is_csc, A, A_is_pattern,
+                Werk)) ;
+            ASSERT_MATRIX_OK (AT, "AT kron", GB0) ;
+        }
 
-    if (B_transpose)
-    { 
-        // BT = B' and typecast to op->ytype
-        GBURBLE ("(B transpose) ") ;
-        GB_CLEAR_MATRIX_HEADER (BT, &BT_header) ;
-        GB_OK (GB_transpose_cast (BT, op->ytype, T_is_csc, B, B_is_pattern,
-            Werk)) ;
-        ASSERT_MATRIX_OK (BT, "BT kron", GB0) ;
+        if (B_transpose)
+        { 
+            // BT = B' and typecast to op->ytype
+            GBURBLE ("(B transpose) ") ;
+            GB_CLEAR_MATRIX_HEADER (BT, &BT_header) ;
+            GB_OK (GB_transpose_cast (BT, op->ytype, T_is_csc, B, B_is_pattern,
+                Werk)) ;
+            ASSERT_MATRIX_OK (BT, "BT kron", GB0) ;
+        }
     }
-
+    
     //--------------------------------------------------------------------------
     // T = kron(A,B)
     //--------------------------------------------------------------------------
 
-    GB_CLEAR_MATRIX_HEADER (T, &T_header) ;
-    GB_OK (GB_kroner (T, T_is_csc, op, flipij,
-        A_transpose ? AT : A, A_is_pattern,
-        B_transpose ? BT : B, B_is_pattern, sel, flipij_sel, Thunk2, Werk)) ;
+    const GrB_Matrix A_kron =
+    (!Mask_is_applicable && A_transpose) ? AT : A;
 
+    const GrB_Matrix B_kron =
+        (!Mask_is_applicable && B_transpose) ? BT : B;
+
+    const bool A_kron_transpose =
+        Mask_is_applicable ? A_transpose : false;
+
+    const bool B_kron_transpose =
+        Mask_is_applicable ? B_transpose : false;
+
+    GB_CLEAR_MATRIX_HEADER (T, &T_header) ;
+    GB_OK (GB_kroner (T, T_is_csc, op, Mask_is_applicable ? false : flipij,
+        A_kron, A_is_pattern, A_kron_transpose,
+        B_kron, B_is_pattern, B_kron_transpose,
+        M, Mask_comp, Mask_struct,
+        sel, flipij_sel, Thunk2, Werk)) ;
+
+    if (T->is_csc != C->is_csc)
+    {
+        info = GB_transpose_in_place(T, T_is_csc, Werk);
+
+        if (info != GrB_SUCCESS)
+        {
+            GB_Matrix_free(&T);
+            GB_FREE_WORKSPACE ;
+            return info;
+        }
+    }
     GB_FREE_WORKSPACE ;
     ASSERT_MATRIX_OK (T, "T = kron(A,B)", GB0) ;
 
@@ -312,6 +341,6 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     // C<M> = accum (C,T): accumulate the results into C via the mask
     //--------------------------------------------------------------------------
 
-    return (GB_accum_mask (C, M, NULL, accum, &T, C_replace, Mask_comp,
+    return (GB_accum_mask (C, NULL, NULL, accum, &T, C_replace, Mask_comp,
         Mask_struct, Werk)) ;
 }

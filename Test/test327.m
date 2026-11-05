@@ -86,6 +86,23 @@ for s = 1:length (sel_names)
                                 GB_spec_compare (C2, C1) ;
 
                                 %---------------------------------------
+                                % kron(A,B) with Mask + Selector
+                                %---------------------------------------
+
+                                M.matrix = sprand (am * bm, an * bn, 0.5) ~= 0 ;
+                                M.is_hyper = true ;
+                                M.is_csc = C_is_csc ;
+
+                                % Reference: regular kron -> selector -> mask
+                                K = GB_spec_kron (C, [ ], [ ], op, A, B, dnn) ;
+
+                                C2 = GB_spec_select_idxunop (C, M, [ ], sel, K, y, dnn) ;
+
+                                % Optimized: kron with both Mask and Selector
+                                C1 = GB_mex_kron (C, M, [ ], op, A, B, dnn, sel, y) ;
+
+                                GB_spec_compare (C2, C1) ;
+                                %---------------------------------------
                                 % kron(A',B)
                                 %---------------------------------------
 
