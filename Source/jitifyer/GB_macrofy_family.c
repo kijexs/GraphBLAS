@@ -46,7 +46,8 @@ void GB_macrofy_family
 
         case GB_jit_ewise_family  : 
             GB_macrofy_ewise (fp, method_code, kcode, (GrB_BinaryOp) op,
-                type1, type2, type3) ;
+                (kcode == GB_JIT_KERNEL_KRONER) ? (GrB_IndexUnaryOp) semiring : NULL,
+                    type1, type2, type3) ;
             break ;
 
         case GB_jit_mxm_family    : 

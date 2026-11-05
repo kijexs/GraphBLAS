@@ -11,11 +11,21 @@
 // C is the ztype of the operator.  C is hypersparse if either A or B are
 // hypersparse, full if both A and B are full, or sparse otherwise.  C is never
 // constructed as bitmap.
+//
+// If select is not NULL, its IndexUnaryOp filters the entries of kron(A,B).
+// The selector is evaluated on the computed value, row and column indices,
+// and the typecast Thunk.  Its result is typecast to bool to determine
+// whether the entry is kept.
 
 #define GB_FREE_WORKSPACE       \
 {                               \
     GB_Matrix_free (&Awork) ;   \
     GB_Matrix_free (&Bwork) ;   \
+    GB_FREE_MEMORY (&p, p_size) ; \
+    GB_FREE_MEMORY (&h32, h_size) ; \
+    GB_FREE_MEMORY (&h64, h_size) ; \
+    GB_FREE_MEMORY (&hp32, hp_size) ; \
+    GB_FREE_MEMORY (&hp64, hp_size) ; \
 }
 
 #define GB_FREE_ALL             \
@@ -29,6 +39,65 @@
 #include "slice/include/GB_search_for_vector.h"
 #include "jitifyer/GB_stringify.h"
 
+//------------------------------------------------------------------------------
+// GB_lookup_xoffset: find the offset of (row,col) in a Ax if present
+//------------------------------------------------------------------------------
+
+static bool GB_lookup_xoffset
+(
+    GrB_Index *p,
+    GrB_Matrix A,
+    GrB_Index row,
+    GrB_Index col
+)
+{
+    GrB_Index vector = A->is_csc ? col : row ;
+    GrB_Index coord  = A->is_csc ? row : col ;
+
+    if (A->p == NULL)
+    {
+        GrB_Index offset = vector * A->vlen + coord ;
+        if (A->b == NULL || ((int8_t *) A->b) [offset])
+        {
+            *p = A->iso ? 0 : offset ;
+            return true ;
+        }
+        return false ;
+    }
+
+    int64_t start, end ;
+    bool res ;
+
+    if (A->h == NULL)
+    {
+        start = A->p_is_32 ? ((uint32_t *) A->p) [vector]
+                           : ((uint64_t *) A->p) [vector] ;
+        end   = A->p_is_32 ? ((uint32_t *) A->p) [vector + 1]
+                           : ((uint64_t *) A->p) [vector + 1] ;
+        end-- ;
+        if (start > end) return false ;
+        res = GB_binary_search (coord, A->i, A->i_is_32, &start, &end) ;
+        if (res) { *p = A->iso ? 0 : start ; }
+        return res ;
+    }
+    else
+    {
+        start = 0 ; end = A->plen - 1 ;
+        res = GB_binary_search (vector, A->h, A->j_is_32, &start, &end) ;
+        if (!res) return false ;
+        int64_t k = start ;
+        start = A->p_is_32 ? ((uint32_t *) A->p) [k]
+                           : ((uint64_t *) A->p) [k] ;
+        end   = A->p_is_32 ? ((uint32_t *) A->p) [k + 1]
+                           : ((uint64_t *) A->p) [k + 1] ;
+        end-- ;
+        if (start > end) return false ;
+        res = GB_binary_search (coord, A->i, A->i_is_32, &start, &end) ;
+        if (res) { *p = A->iso ? 0 : start ; }
+        return res ;
+    }
+}
+
 GrB_Info GB_kroner                  // C = kron (A,B)
 (
     GrB_Matrix C,                   // output matrix
@@ -37,8 +106,16 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     const bool flipij,              // if true, i and j are flipped: z=(x,y,j,i)
     const GrB_Matrix A_in,          // input matrix
     bool A_is_pattern,              // true if values of A are not used
+    bool A_transpose,
     const GrB_Matrix B_in,          // input matrix
     bool B_is_pattern,              // true if values of B are not used
+    bool B_transpose,
+    const GrB_Matrix Mask,          // optional mask for C, unused if NULL
+    const bool Mask_comp,           // if true, use !Mask
+    const bool Mask_struct,         // if true, use only the structure of Mask
+    const GrB_IndexUnaryOp select,  // optional selector for C, unused if NULL
+    const bool flipij_sel,          // if true, i and j are flipped for selector
+    const GrB_Scalar Thunk,         // third input: scalar y
     GB_Werk Werk
 )
 {
@@ -52,6 +129,21 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
     struct GB_Matrix_opaque Awork_header, Bwork_header ;
     GrB_Matrix Awork = NULL, Bwork = NULL ;
+
+    //--------------------------------------------------------------------------
+    // working arrays for selector counting and hypersparse compaction
+    //--------------------------------------------------------------------------
+
+    void *restrict p = NULL ;
+    size_t p_size = 0 ;
+    int64_t work_nvec = 0 ;
+    struct GB_Matrix_opaque stub_header ;
+    GrB_Matrix C_stub = NULL ;
+
+    int32_t *h32 = NULL, *hp32 = NULL ;
+    int64_t *h64 = NULL, *hp64 = NULL ;
+
+    size_t h_size = 0, hp_size = 0 ;
 
     ASSERT_MATRIX_OK (A_in, "A_in for kron (A,B)", GB0) ;
     ASSERT_MATRIX_OK (B_in, "B_in for kron (A,B)", GB0) ;
@@ -68,8 +160,9 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     // bitmap case: create sparse copies of A and B if they are bitmap
     //--------------------------------------------------------------------------
 
+    const bool use_mask = (Mask != NULL && !Mask_comp) ;
     GrB_Matrix A = A_in ;
-    if (GB_IS_BITMAP (A))
+    if (!use_mask && GB_IS_BITMAP (A))
     { 
         GBURBLE ("A:") ;
         GB_CLEAR_MATRIX_HEADER (Awork, &Awork_header) ;
@@ -81,7 +174,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     }
 
     GrB_Matrix B = B_in ;
-    if (GB_IS_BITMAP (B))
+    if (!use_mask && GB_IS_BITMAP (B))
     { 
         GBURBLE ("B:") ;
         GB_CLEAR_MATRIX_HEADER (Bwork, &Bwork_header) ;
@@ -116,24 +209,48 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     // determine the number of threads to use
     //--------------------------------------------------------------------------
 
-    double work = ((double) anz) * ((double) bnz)
-                + (((double) anvec) * ((double) bnvec)) ;
+    double work = use_mask ? (double) GB_nnz (Mask) + (double) Mask->nvec :
+        (((double) anz) * ((double) bnz) +
+        (((double) anvec) * ((double) bnvec))) ;
 
     int nthreads_max = GB_Context_nthreads_max ( ) ;
     double chunk = GB_Context_chunk ( ) ;
     int nthreads = GB_nthreads (work, chunk, nthreads_max) ;
 
     //--------------------------------------------------------------------------
+    // get selector
+    //--------------------------------------------------------------------------
+
+    GxB_index_unary_function sel = (select == NULL) ? NULL : select->idxunop_function ;
+    GB_Opcode opcode_sel = (select == NULL) ? GB_NOP_code : select->opcode ;
+    // positional ops or user-defined idxunops never result in an iso matrix
+    bool sel_is_positional = (select != NULL) &&
+        (GB_OPCODE_IS_POSITIONAL(opcode_sel) || (opcode_sel == GB_USER_idxunop_code)) ;
+
+    // allocate the ythunk scalars
+    size_t ythunk_size = (sel != NULL) ? select->ytype->size : sizeof(int64_t) ;
+    GB_void ythunk [GB_VLA(ythunk_size)] ;
+    // ythunk = (select->ytype) Thunk
+    if (Thunk != NULL && select != NULL)
+    {
+        GB_cast_scalar (ythunk, select->ytype->code, Thunk->x,
+            Thunk->type->code, Thunk->type->size) ;
+    }
+
+    const GB_void *y = (sel == NULL) ? NULL : &ythunk ;
+
+    //--------------------------------------------------------------------------
     // check if C is iso and compute its iso value if it is
     //--------------------------------------------------------------------------
 
     GrB_Type ctype = op->ztype ;
+    GB_Type_code ccode = ctype->code ;
     const size_t csize = ctype->size ;
     GB_void cscalar [GB_VLA(csize)] ;
     bool C_iso = GB_emult_iso (cscalar, ctype, A, B, op) ;
 
     //--------------------------------------------------------------------------
-    // allocate the output matrix C
+    // compute info of the output matrix C
     //--------------------------------------------------------------------------
 
     // C has the same type as z for the multiply operator, z=op(x,y)
@@ -145,30 +262,496 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     ok = ok & GB_int64_multiply (&cnvec, anvec, bnvec) ;
     ASSERT (ok) ;
 
+    if (use_mask)
+    {
+        cvlen = Mask->vlen;
+        cvdim = Mask->vdim;
+    }
+    work_nvec = use_mask ? Mask->nvec : (int64_t) cnvec ;
+
+    // A hypersparse mask already enumerates just the physical vectors needed.
+    bool C_is_hyper = use_mask ? (Mask->h != NULL) :
+        ((cvdim > 1) && (Ah != NULL || Bh != NULL)) ;
+    bool C_is_full = !use_mask && GB_as_if_full (A) && GB_as_if_full (B) ;
+    int C_sparsity = C_is_full ? GxB_FULL :
+        ((C_is_hyper) ? GxB_HYPERSPARSE : GxB_SPARSE) ;
+
+    //--------------------------------------------------------------------------
+    // count entries retained by the selector
+    //--------------------------------------------------------------------------
+    
+    GrB_Index cnz = (sel == NULL && !use_mask) ? cnzmax : 0 ;
+    int64_t nvec_nonempty = 0 ;
+    
+    bool Cp_is_32, Cj_is_32, Ci_is_32 ;
+    
+    const bool need_count = use_mask ||
+        (sel != NULL && (!C_iso || sel_is_positional)) ;
+    if (need_count)
+    { 
+        const uint64_t count_max = use_mask ? GB_nnz (Mask) : cnzmax ;
+        GB_determine_pji_is_32 (&Cp_is_32, &Cj_is_32, &Ci_is_32,
+            C_sparsity, count_max, (int64_t) cvlen, (int64_t) cvdim, Werk) ;
+        size_t psize = Cp_is_32 ? sizeof (uint32_t) : sizeof (uint64_t) ;
+        p = GB_MALLOC_MEMORY (work_nvec + 1, psize, &(p_size)) ;
+        if (p == NULL)
+        {
+            GB_FREE_ALL ;
+            return (GrB_OUT_OF_MEMORY) ;
+        }
+        ASSERT (p_size == GB_Global_memtable_size (p)) ;
+        GB_memset (p, 0, p_size, nthreads) ;
+
+        GB_CLEAR_MATRIX_HEADER(C_stub, &stub_header) ;
+        C_stub->magic = GB_MAGIC ;
+        // map working arrays into the stub matrix
+        C_stub->type  = ctype ;
+        C_stub->iso = C_iso ;
+        C_stub->x = C_iso ? cscalar : NULL ;
+        C_stub->p = p ;
+        C_stub->p_is_32 = Cp_is_32 ;
+        C_stub->nvec = 0 ;
+        if (use_mask && select == NULL)
+        {
+            // Mask-only count: the product values and operator are not needed.
+            int64_t bnrows = B_transpose ? GB_NCOLS (B) : GB_NROWS (B) ;
+            int64_t bncols = B_transpose ? GB_NROWS (B) : GB_NCOLS (B) ;
+            
+            GB_Mp_DECLARE (Mp, const) ; GB_Mp_PTR (Mp, Mask) ;
+            GB_Mh_DECLARE (Mh, const) ; GB_Mh_PTR (Mh, Mask) ;
+            GB_Mi_DECLARE (Mi, const) ; GB_Mi_PTR (Mi, Mask) ;
+            const size_t msize = Mask->type->size ;
+            const GB_void *Mx = Mask->x ;
+
+            int64_t vlen = Mask->vlen ;
+
+            //----------------------------------------------------------------------
+            // count entries per vector
+            //----------------------------------------------------------------------
+
+            #pragma omp parallel num_threads(nthreads)
+            {
+                GrB_Index offset ;
+                
+                #pragma omp for schedule(static)
+                for (GrB_Index k = 0 ; k < work_nvec ; k++)
+                {
+                    GrB_Index j = GBh_M (Mh, k) ;
+                    
+                    int64_t pM_start = GBp_M (Mp, k, vlen) ;
+                    
+                    int64_t pM_end = GBp_M (Mp, k + 1, vlen) ;
+                    for (GrB_Index pM = pM_start ; pM < pM_end ; pM++)
+                    {
+                        if (!GBb_M (Mask->b, pM)) continue ;
+
+                        int64_t i = GBi_M (Mi, pM, vlen) ;
+                        GrB_Index Mrow = Mask->is_csc ? i : j ;
+                        GrB_Index Mcol = Mask->is_csc ? j : i ;
+
+                        if (Mask_struct || (Mask->iso ? ((bool *) Mask->x) [0] : ((bool *) Mask->x) [pM]))
+                        {
+                            GrB_Index arow = A_transpose ? (Mcol / bncols)
+                                                         : (Mrow / bnrows) ;
+                            GrB_Index acol = A_transpose ? (Mrow / bnrows)
+                                                         : (Mcol / bncols) ;
+                            GrB_Index brow = B_transpose ? (Mcol % bncols)
+                                                         : (Mrow % bnrows) ;
+                            GrB_Index bcol = B_transpose ? (Mrow % bnrows)
+                                                         : (Mcol % bncols) ;
+                        
+                            if (GB_lookup_xoffset (&offset, A, arow, acol) &&
+                                GB_lookup_xoffset (&offset, B, brow, bcol))
+                            {
+                                if (Cp_is_32)
+                                    ((uint32_t *) p) [k]++ ;
+                                else
+                                    ((uint64_t *) p) [k]++ ;
+                            }
+                        }
+                    }
+                }
+            }
+            info = GrB_SUCCESS ;
+        }
+        else
+        {
+            // Product-driven or mask-driven JIT count.
+            const GrB_Matrix kernel_Mask = use_mask ? Mask : NULL ;
+            info = GB_kroner_jit (C_stub, op, select, y, flipij,
+                A, A_transpose, B, B_transpose, kernel_Mask, use_mask && Mask_struct, false, nthreads) ;
+        }
+
+        if (info != GrB_SUCCESS && info != GrB_NO_VALUE)
+        {
+            GB_FREE_ALL ;
+            return (info) ;
+        }
+
+        if (info == GrB_NO_VALUE)
+        { 
+            // via the generic kernel
+            #define GB_A_TYPE GB_void
+            #define GB_B_TYPE GB_void
+            #define GB_C_TYPE GB_void
+            #define GB_A_ISO A_iso
+            #define GB_B_ISO B_iso
+            #define GB_C_ISO C_iso
+            #define P_PTR (C_stub->p)
+            #define P_IS_32 Cp_is_32
+            #define GB_MASK_STRUCT Mask_struct
+            const bool A_iso = A->iso ;
+            const bool B_iso = B->iso ;
+            const int64_t asize = A->type->size ;
+            const int64_t bsize = B->type->size ;
+            const GB_Type_code zcode = select->ztype->code ;
+            const GB_Type_code xcode = (select->xtype == NULL) ? 0 : select->xtype->code ;
+            const size_t zsize = select->ztype->size ;
+            const size_t xsize = (select->xtype == NULL) ? 0 : select->xtype->size ;
+            GB_cast_function cast_Z_to_bool = GB_cast_factory (GB_BOOL_code, zcode) ;
+            GB_cast_function cast_C_to_X = (select->xtype == NULL) ? NULL :
+                GB_cast_factory (xcode, ccode) ;
+    
+            #define GB_TEST_KRON_VALUE_OF_ENTRY(keep,p)                                         \
+                bool keep ;                                                                     \
+                if (C_iso)                                                                      \
+                {                                                                               \
+                                                                                                \
+                    /* C is iso */                                                              \
+                                                                                                \
+                    if (select->xtype == NULL)                                                  \
+                    {                                                                           \
+                        /* C is iso and selector does not use the value */                      \
+                        if (select->ztype == GrB_BOOL)                                         \
+                        {                                                                      \
+                            sel (&keep, NULL, flipij_sel ? jC : iC,                            \
+                                flipij_sel ? iC : jC, y) ;                                     \
+                        }                                                                      \
+                        else                                                                   \
+                        {                                                                      \
+                            GB_void z [GB_VLA(zsize)] ;                                        \
+                            sel (z, NULL, flipij_sel ? jC : iC,                                \
+                                flipij_sel ? iC : jC, y) ;                                     \
+                            cast_Z_to_bool (&keep, z, zsize) ;                                 \
+                        }                                                                      \
+                    }                                                                           \
+                    else                                                                        \
+                    {                                                                           \
+                        /* C is iso and selector uses the value */                              \
+                        GB_void x [GB_VLA(xsize)] ;                                             \
+                        GB_cast_scalar (x, xcode, cscalar, ccode, csize) ;                      \
+                        if (select->ztype == GrB_BOOL)                                          \
+                        {                                                                       \
+                            /* C is iso and z is bool */                                        \
+                            sel (&keep, x, flipij_sel ? jC : iC,                                \
+                                flipij_sel ? iC : jC, y) ;                                      \
+                        }                                                                       \
+                        else                                                                    \
+                        {                                                                       \
+                            /* C is iso and z requires typecasting */                           \
+                            GB_void z [GB_VLA(zsize)] ;                                         \
+                            sel (z, x, flipij_sel ? jC : iC, flipij_sel ? iC : jC, y) ;         \
+                            cast_Z_to_bool (&keep, z, zsize) ;                                  \
+                        }                                                                       \
+                    }                                                                           \
+                }                                                                               \
+                else                                                                            \
+                {                                                                               \
+                    if (select->xtype == NULL)                                                  \
+                    {                                                                           \
+                        /* C is non-iso and selector is positional */                           \
+                        if (select->ztype == GrB_BOOL)                                         \
+                        {                                                                      \
+                            sel (&keep, NULL, flipij_sel ? jC : iC,                            \
+                                flipij_sel ? iC : jC, y) ;                                     \
+                        }                                                                      \
+                        else                                                                   \
+                        {                                                                      \
+                            GB_void z [GB_VLA(zsize)] ;                                        \
+                            sel (z, NULL, flipij_sel ? jC : iC,                                \
+                                flipij_sel ? iC : jC, y) ;                                     \
+                            cast_Z_to_bool (&keep, z, zsize) ;                                 \
+                        }                                                                      \
+                    }                                                                           \
+                    else if (select->ztype == GrB_BOOL && select->xtype == ctype)               \
+                    {                                                                           \
+                        /* C is non-iso and no typecasting is required */                       \
+                        sel (&keep, p, flipij_sel ? jC : iC,                                    \
+                            flipij_sel ? iC : jC, y) ;                                          \
+                    }                                                                           \
+                    else                                                                        \
+                    {                                                                           \
+                        /* C is non-iso and typecasting is required */                          \
+                        GB_void z [GB_VLA(zsize)] ;                                             \
+                        GB_void x [GB_VLA(xsize)] ;                                             \
+                        cast_C_to_X (x, p, csize) ;                                             \
+                        sel (z, x, flipij_sel ? jC : iC, flipij_sel ? iC : jC, y) ;             \
+                        cast_Z_to_bool (&keep, z, zsize) ;                                      \
+                    }                                                                           \
+                }                                                                               
+
+            GxB_binary_function fmult = op->binop_function ;
+            GxB_index_binary_function fmult_idx = op->idxbinop_function ;
+            const void *theta = op->theta ;
+            GB_cast_function cast_A = NULL, cast_B = NULL ;
+            if (!A_is_pattern)
+            { 
+                cast_A = GB_cast_factory (op->xtype->code, A->type->code) ;
+            }
+            if (!B_is_pattern)
+            { 
+                cast_B = GB_cast_factory (op->ytype->code, B->type->code) ;
+            }
+
+            #define GB_DECLAREA(a) GB_void a [GB_VLA(asize)]
+            #define GB_DECLAREB(b) GB_void b [GB_VLA(bsize)]
+
+            GB_Ai_DECLARE (Ai, const) ; GB_Ai_PTR (Ai, A) ;
+            GB_Bi_DECLARE (Bi, const) ; GB_Bi_PTR (Bi, B) ;
+
+            #define GB_GETA(a,Ax,p,iso)                         \
+            {                                                   \
+                if (!A_is_pattern)                              \
+                {                                               \
+                    cast_A (a, Ax + (p)*asize, asize) ;         \
+                }                                               \
+            }
+
+            #define GB_GETB(b,Bx,p,iso)                         \
+            {                                                   \
+                if (!B_is_pattern)                              \
+                {                                               \
+                    cast_B (b, Bx + (p)*bsize, bsize) ;         \
+                }                                               \
+            }
+
+            #define GB_KRONECKER_OP(Cx,pC,a,ix,jx,b,iy,jy)      \
+            {                                                   \
+                if (fmult != NULL)                              \
+                {                                               \
+                    /* standard binary operator */              \
+                    fmult (Cx +(pC)*csize, a, b) ;              \
+                }                                               \
+                else                                            \
+                {                                               \
+                    /* index binary operator */                 \
+                    if (flipij)                                 \
+                    {                                           \
+                        fmult_idx (Cx +(pC)*csize,              \
+                            a, jx, ix, b, jy, iy, theta) ;      \
+                    }                                           \
+                    else                                        \
+                    {                                           \
+                        fmult_idx (Cx +(pC)*csize,              \
+                            a, ix, jx, b, iy, jy, theta) ;      \
+                    }                                           \
+                }                                               \
+            }
+
+            #define GB_GENERIC
+            #include "ewise/include/GB_ewise_shared_definitions.h"
+            if (use_mask)
+            {
+                #include "kronecker/template/GB_kroner_count_mask_template.c"
+            }
+            else
+            {
+                #include "kronecker/template/GB_kroner_count_sel_template.c"
+            }
+            #undef GB_MASK_STRUCT
+            #undef GB_TEST_KRON_VALUE_OF_ENTRY
+        }
+        
+        if (info == GrB_SUCCESS) 
+        { 
+            p = C_stub->p ;
+        }
+
+        GB_cumsum (p, C_stub->p_is_32, work_nvec, &nvec_nonempty, nthreads, Werk) ;
+
+        const bool p_is_32 = C_stub->p_is_32 ;
+        cnz = p_is_32 ? ((const uint32_t *) p) [work_nvec] :
+                        ((const uint64_t *) p) [work_nvec] ;
+
+        C_is_full = !use_mask && C_is_full && (cnz == cnzmax) ;
+
+        C_sparsity = C_is_full ? GxB_FULL : (C_is_hyper ? GxB_HYPERSPARSE : GxB_SPARSE) ;
+
+        GB_determine_pji_is_32 (&Cp_is_32, &Cj_is_32, &Ci_is_32,
+            C_sparsity, cnz, (int64_t) cvlen, (int64_t) cvdim, Werk) ;
+
+        if (!C_is_full)
+        { 
+            if (C_is_hyper)
+            { 
+                if (Cj_is_32)
+                {
+                    h32 = GB_MALLOC_MEMORY (nvec_nonempty, sizeof (uint32_t), &h_size) ;
+                    if (h32 == NULL)
+                    {
+                        GB_FREE_ALL ;
+                        return (GrB_OUT_OF_MEMORY) ;
+                    }
+                }
+                else
+                {
+                    h64 = GB_MALLOC_MEMORY (nvec_nonempty, sizeof (uint64_t), &h_size) ;
+                    if (h64 == NULL)
+                    {
+                        GB_FREE_ALL ;
+                        return (GrB_OUT_OF_MEMORY) ;
+                    }
+                }
+
+                if (Cp_is_32)
+                {
+                    hp32 = GB_MALLOC_MEMORY (nvec_nonempty + 1, sizeof (uint32_t), &hp_size) ;
+                    if (hp32 == NULL)
+                    {
+                        GB_FREE_ALL ;
+                        return (GrB_OUT_OF_MEMORY) ;
+                    }
+                    hp32 [0] = 0 ;
+                }
+                else
+                {
+                    hp64 = GB_MALLOC_MEMORY (nvec_nonempty + 1, sizeof (uint64_t), &hp_size) ;
+                    if (hp64 == NULL)
+                    {
+                        GB_FREE_ALL ;
+                        return (GrB_OUT_OF_MEMORY) ;
+                    }
+                    hp64 [0] = 0 ;
+                }
+
+                void *h_ptr = Cj_is_32 ? (void *) h32 : (void *) h64 ;
+
+                void *hp_ptr = Cp_is_32 ? (void *) hp32 : (void *) hp64 ;
+
+                ASSERT (h_size == GB_Global_memtable_size (h_ptr)) ;
+                ASSERT (hp_size == GB_Global_memtable_size (hp_ptr)) ;
+                
+                nvec_nonempty = 0 ;
+                GB_Mh_DECLARE (Mh, const) ;
+                if (use_mask) GB_Mh_PTR (Mh, Mask) ;
+                for (int64_t kC = 0 ; kC < work_nvec ; kC++)
+                {
+                    const uint64_t pstart = p_is_32 ?
+                        ((const uint32_t *) p) [kC] :
+                        ((const uint64_t *) p) [kC] ;
+                    const uint64_t pend = p_is_32 ?
+                        ((const uint32_t *) p) [kC + 1] :
+                        ((const uint64_t *) p) [kC + 1] ;
+                    if (pend > pstart)
+                    {
+                        int64_t kH = nvec_nonempty++ ;
+                        uint64_t jC ;
+                        if (use_mask)
+                        {
+                            jC = GBh_M (Mh, kC) ;
+                        }
+                        else
+                        {
+                            int64_t kA = kC / bnvec ;
+                            int64_t kB = kC % bnvec ;
+                            const int64_t jA = GBh_A (Ah, kA) ;
+                            const int64_t jB = GBh_B (Bh, kB) ;
+                            jC = (uint64_t) jA * bvdim + jB ;
+                        }
+
+                        if (Cj_is_32)
+                        {
+                            h32 [kH] = (uint32_t) jC ;
+                        }
+                        else
+                        {
+                            h64 [kH] = jC ;
+                        }
+
+                        if (Cp_is_32)
+                        {
+                            hp32 [kH + 1] = (uint32_t) pend ;
+                        }
+                        else
+                        {
+                            hp64 [kH + 1] = pend ;
+                        }
+                    }
+                }
+                cnz = Cp_is_32 ? ((const uint32_t *) hp32) [nvec_nonempty] :
+                                 ((const uint64_t *) hp64) [nvec_nonempty] ;
+            }
+        }
+    }
+
+    //--------------------------------------------------------------------------
+    // update C_iso based on the selector
+    //--------------------------------------------------------------------------
+    
+    // if the selector is positional, it may have altered the values, so C 
+    // can no longer be guaranteed to be iso
+    C_iso = C_iso && !sel_is_positional ;
     if (C_iso)
     { 
+        if (sel != NULL)
+        {
+            bool result = false ;
+            sel (&result, cscalar, 0, 0, y) ;
+            if (result) 
+            {
+                cnz = cnzmax ;
+            }
+        }
+        
         // the values of A and B are no longer needed if C is iso
         GBURBLE ("(iso kron) ") ;
         A_is_pattern = true ;
         B_is_pattern = true ;
     }
 
-    // C is hypersparse if either A or B are hypersparse.  It is never bitmap.
-    bool C_is_hyper = (cvdim > 1) && (Ah != NULL || Bh != NULL) ;
-    bool C_is_full = GB_as_if_full (A) && GB_as_if_full (B) ;
-    int C_sparsity = C_is_full ? GxB_FULL :
-        ((C_is_hyper) ? GxB_HYPERSPARSE : GxB_SPARSE) ;
+    //--------------------------------------------------------------------------
+    // allocate the output matrix C
+    //--------------------------------------------------------------------------
 
     // determine the p_is_32, j_is_32, and i_is_32 settings for the new matrix
 
-    bool Cp_is_32, Cj_is_32, Ci_is_32 ;
-    GB_determine_pji_is_32 (&Cp_is_32, &Cj_is_32, &Ci_is_32,
-        C_sparsity, cnzmax, (int64_t) cvlen, (int64_t) cvdim, Werk) ;
+    if (sel == NULL || C_iso)
+    {
+        GB_determine_pji_is_32 (&Cp_is_32, &Cj_is_32, &Ci_is_32,
+            C_sparsity, cnz, (int64_t) cvlen, (int64_t) cvdim, Werk) ;
+    }
+
+
+    // C_is_hyper special case: allocate only nvec_nonempty vectors
+    int64_t final_nvec = (C_is_hyper &&
+        (use_mask || (!C_iso && sel != NULL))) ? nvec_nonempty : cnvec ;
+    
+        // Empty Kronecker result: construct a valid empty matrix
+    if (cnz == 0)
+    {
+        C_sparsity = GxB_HYPERSPARSE;
+
+        GB_determine_pji_is_32(&Cp_is_32, &Cj_is_32, &Ci_is_32,
+            C_sparsity, 0, (int64_t) cvlen, (int64_t) cvdim, Werk);
+
+        GB_OK(GB_new_bix(&C, 
+            ctype, (int64_t) cvlen, (int64_t) cvdim, GB_ph_malloc, C_is_csc,
+            C_sparsity, true, B->hyper_switch, 0, 0, true, false,
+            Cp_is_32, Cj_is_32, Ci_is_32));
+
+        C->magic = GB_MAGIC;
+
+        GB_FREE_WORKSPACE;
+        return GrB_SUCCESS;
+    }
+    
+    // reuse the precomputed p/h arrays for selected results if use_working_arrays == true
+    bool use_working_arrays = (need_count && !C_is_full && cnz > 0) ;
 
     GB_OK (GB_new_bix (&C, // full, sparse, or hyper; existing header
-        ctype, (int64_t) cvlen, (int64_t) cvdim, GB_ph_malloc, C_is_csc,
-        C_sparsity, true, B->hyper_switch, cnvec, cnzmax, true, C_iso,
-        Cp_is_32, Cj_is_32, Ci_is_32)) ;
+        ctype, (int64_t) cvlen, (int64_t) cvdim, use_working_arrays ? GB_ph_null : GB_ph_malloc, C_is_csc,
+        C_sparsity, true, B->hyper_switch, final_nvec, cnz, true, C_iso,
+        Cp_is_32, Cj_is_32, Ci_is_32)) ;    
 
     //--------------------------------------------------------------------------
     // compute the column counts of C: Cp and Ch if C is hypersparse
@@ -180,43 +763,92 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
     if (!C_is_full)
     { 
-        // C is sparse or hypersparse
-        int64_t kC ;
-        #pragma omp parallel for num_threads(nthreads) schedule(static)
-        for (kC = 0 ; kC < cnvec ; kC++)
-        {
-            const int64_t kA = kC / bnvec ;
-            const int64_t kB = kC % bnvec ;
-            // get A(:,jA), the (kA)th vector of A
-            const int64_t jA = GBh_A (Ah, kA) ;
-            const int64_t aknz = (Ap == NULL) ? avlen :
-                (GB_IGET (Ap, kA+1) - GB_IGET (Ap, kA)) ;
-            // get B(:,jB), the (kB)th vector of B
-            const int64_t jB = GBh_B (Bh, kB) ;
-            const int64_t bknz = (Bp == NULL) ? bvlen :
-                (GB_IGET (Bp, kB+1) - GB_IGET (Bp, kB)) ;
-            // determine # entries in C(:,jC), the (kC)th vector of C
-            // int64_t kC = kA * bnvec + kB ;
-            // Cp [kC] = aknz * bknz ;
-            GB_ISET (Cp, kC, aknz * bknz) ;
+        if (need_count)
+        { 
             if (C_is_hyper)
             { 
-                // Ch [kC] = jA * bvdim + jB ;
-                GB_ISET (Ch, kC, jA * bvdim + jB) ;
+                C->h = Cj_is_32 ? (void *) h32 : (void *) h64 ;
+
+                C->p = Cp_is_32 ? (void *) hp32 : (void *) hp64 ;
+
+                C->h_size = h_size ;
+                C->p_size = hp_size ;
+
+                C->j_is_32 = Cj_is_32 ;
+                C->p_is_32 = Cp_is_32 ;
+                
+                C->nvec = nvec_nonempty ;
+                C->plen = nvec_nonempty ;
+
+                GB_nvec_nonempty_set (C, nvec_nonempty) ;
+
+                C->nvals = cnz ;
+
+                h32 = NULL ;
+                h64 = NULL ;
+                hp32 = NULL ;
+                hp64 = NULL ;
+
+                h_size = 0 ;
+                hp_size = 0 ;
+            }
+            else
+            { 
+                C->p = p ;
+                C->p_size = p_size ;
+                C->p_is_32 = C_stub->p_is_32 ;
+
+                p = NULL ;
+                p_size = 0 ;
+
+                C->nvec = work_nvec ;
+                C->plen = work_nvec ;
+
+                C->nvals = cnz ;
+
+                GB_nvec_nonempty_set (C, nvec_nonempty) ;
             }
         }
+        else if (cnz > 0)
+        { 
+            // C is sparse or hypersparse
+            int64_t kC ;
+            #pragma omp parallel for num_threads(nthreads) schedule(static)
+            for (kC = 0 ; kC < cnvec ; kC++)
+            {
+                const int64_t kA = kC / bnvec ;
+                const int64_t kB = kC % bnvec ;
+                // get A(:,jA), the (kA)th vector of A
+                const int64_t jA = GBh_A (Ah, kA) ;
+                const int64_t aknz = (Ap == NULL) ? avlen :
+                    (GB_IGET (Ap, kA+1) - GB_IGET (Ap, kA)) ;
+                // get B(:,jB), the (kB)th vector of B
+                const int64_t jB = GBh_B (Bh, kB) ;
+                const int64_t bknz = (Bp == NULL) ? bvlen :
+                    (GB_IGET (Bp, kB+1) - GB_IGET (Bp, kB)) ;
+                // determine # entries in C(:,jC), the (kC)th vector of C
+                // int64_t kC = kA * bnvec + kB ;
+                // Cp [kC] = aknz * bknz ;
+                GB_ISET (Cp, kC, aknz * bknz) ;
+                if (C_is_hyper)
+                { 
+                    // Ch [kC] = jA * bvdim + jB ;
+                    GB_ISET (Ch, kC, jA * bvdim + jB) ;
+                }
+            }
 
-        int64_t nvec_nonempty ;
-        GB_cumsum (Cp, Cp_is_32, cnvec, &nvec_nonempty, nthreads, Werk) ;
-        GB_nvec_nonempty_set (C, nvec_nonempty) ;
-        C->nvals = GB_IGET (Cp, cnvec) ;
-        if (C_is_hyper) C->nvec = cnvec ;
+            int64_t nvec_nonempty ;
+            GB_cumsum (Cp, Cp_is_32, cnvec, &nvec_nonempty, nthreads, Werk) ;
+            GB_nvec_nonempty_set (C, nvec_nonempty) ;
+            C->nvals = GB_IGET (Cp, cnvec) ;
+            if (C_is_hyper) C->nvec = cnvec ;
+        }
     }
-
+    
     C->magic = GB_MAGIC ;
-
+    
     //--------------------------------------------------------------------------
-    // C = kron (A,B) where C is iso and/or full full
+    // C = kron (A,B) where C is iso and/or full
     //--------------------------------------------------------------------------
 
     if (C_iso)
@@ -236,7 +868,7 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     // quick return if C is empty
     //--------------------------------------------------------------------------
 
-    int64_t cnz = GB_nnz (C) ;
+    cnz = GB_nnz (C) ;
     if (cnz == 0)
     { 
         GB_FREE_WORKSPACE ;
@@ -247,8 +879,23 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     // C = kron (A,B)
     //--------------------------------------------------------------------------
 
+    // In the hyper branch C owns the compact hp
+    // Borrow p for filling, then restore hp before workspace cleanup
+    void *temporary_p = C->p ;
+    bool temporary_p_is_32 = C->p_is_32 ;
+    if (p != NULL && C_is_hyper && (use_mask || !C_iso))
+    {
+        C->p = p ;
+        C->p_is_32 = C_stub->p_is_32 ;
+    }
+    
     // via the JIT kernel
-    info = GB_kroner_jit (C, op, flipij, A, B, nthreads) ;
+    const GrB_Matrix kernel_Mask = use_mask ? Mask : NULL ;
+    info = GB_kroner_jit (C, op, select, y, flipij,
+        A, A_transpose, B, B_transpose, kernel_Mask, use_mask && Mask_struct, false, nthreads) ;
+
+    C->p = temporary_p ;
+    C->p_is_32 = temporary_p_is_32 ;
 
     if (info == GrB_NO_VALUE)
     { 
@@ -259,10 +906,59 @@ GrB_Info GB_kroner                  // C = kron (A,B)
         #define GB_A_ISO A_iso
         #define GB_B_ISO B_iso
         #define GB_C_ISO C_iso
+        #define GB_MASK_STRUCT Mask_struct
         const bool A_iso = A->iso ;
         const bool B_iso = B->iso ;
         const int64_t asize = A->type->size ;
         const int64_t bsize = B->type->size ;
+        GB_Type_code zcode, xcode ;
+        size_t zsize, xsize ;
+        GB_cast_function cast_Z_to_bool = NULL, cast_C_to_X = NULL ;
+
+        if (sel != NULL && !C_iso)
+        {
+            zcode = select->ztype->code ;
+            xcode = (select->xtype == NULL) ? 0 : select->xtype->code ;
+            zsize = select->ztype->size ;
+            xsize = (select->xtype == NULL) ? 0 : select->xtype->size ;
+            cast_Z_to_bool = GB_cast_factory (GB_BOOL_code, zcode) ;
+            cast_C_to_X = (select->xtype == NULL) ? NULL :
+                GB_cast_factory (xcode, ccode) ;
+
+            #define GB_TEST_KRON_VALUE_OF_ENTRY(keep,p)                                     \
+                bool keep ;                                                                 \
+                if (select->xtype == NULL)                                                  \
+                {                                                                           \
+                    /* C is non-iso and selector is positional */                           \
+                    if (select->ztype == GrB_BOOL)                                             \
+                    {                                                                          \
+                        sel (&keep, NULL, flipij_sel ? jC : iC,                                \
+                            flipij_sel ? iC : jC, y) ;                                         \
+                    }                                                                          \
+                    else                                                                       \
+                    {                                                                          \
+                        GB_void z [GB_VLA(zsize)] ;                                            \
+                        sel (z, NULL, flipij_sel ? jC : iC,                                    \
+                            flipij_sel ? iC : jC, y) ;                                         \
+                        cast_Z_to_bool (&keep, z, zsize) ;                                     \
+                    }                                                                          \
+                }                                                                           \
+                else if (select->ztype == GrB_BOOL && select->xtype == ctype)               \
+                {                                                                           \
+                    /* C is non-iso and no typecasting is required */                       \
+                    sel (&keep, p, flipij_sel ? jC : iC,                                    \
+                        flipij_sel ? iC : jC, y) ;                                          \
+                }                                                                           \
+                else                                                                        \
+                {                                                                           \
+                    /* C is non-iso and typecasting is required */                          \
+                    GB_void z [GB_VLA(zsize)] ;                                             \
+                    GB_void x [GB_VLA(xsize)] ;                                             \
+                    cast_C_to_X (x, p, csize) ;                                             \
+                    sel (z, x, flipij_sel ? jC : iC, flipij_sel ? iC : jC, y) ;             \
+                    cast_Z_to_bool (&keep, z, zsize) ;                                      \
+                }                                                                           
+            }
 
         GxB_binary_function fmult = op->binop_function ;
         GxB_index_binary_function fmult_idx = op->idxbinop_function ;
@@ -323,10 +1019,50 @@ GrB_Info GB_kroner                  // C = kron (A,B)
 
         #define GB_GENERIC
         #include "ewise/include/GB_ewise_shared_definitions.h"
-        #include "kronecker/template/GB_kroner_template.c"
+        if (use_mask)
+        {
+            if (sel != NULL && !C_iso)
+            {
+                #define GB_HAS_SELECTOR 1
+                #include "kronecker/template/GB_kroner_mask_template.c"
+                #undef GB_HAS_SELECTOR
+            }
+            else
+            {
+                #include "kronecker/template/GB_kroner_mask_template.c"
+            }
+        }
+        else if (sel != NULL && !C_iso)
+        { 
+            #include "kronecker/template/GB_kroner_sel_template.c"
+        }
+        else
+        { 
+            #include "kronecker/template/GB_kroner_template.c"
+        }
+        #undef GB_TEST_KRON_VALUE_OF_ENTRY
         info = GrB_SUCCESS ;
     }
+    
+    if (sel != NULL && !C_iso && !C_is_hyper && Cp_is_32 && !C->p_is_32)
+    {
+        uint8_t *raw = (uint8_t *) C->p ;
 
+        for (int64_t k = 0 ; k <= C->nvec ; k++)
+        {
+            uint32_t value = (uint32_t) ((uint64_t *) C->p) [k] ;
+
+            memcpy (raw + (size_t) k * sizeof (uint32_t), &value, sizeof (uint32_t)) ;
+        }
+
+        bool realloc_ok = false ;
+
+        GB_REALLOC_MEMORY(C->p, (size_t) C->nvec + 1, sizeof (uint32_t), &C->p_size, &realloc_ok) ;
+        ASSERT (realloc_ok) ;
+        
+        C->p_is_32 = true ;
+    }
+    
     //--------------------------------------------------------------------------
     // remove empty vectors from C, if hypersparse
     //--------------------------------------------------------------------------
@@ -344,4 +1080,3 @@ GrB_Info GB_kroner                  // C = kron (A,B)
     GB_FREE_WORKSPACE ;
     return (info) ;
 }
-

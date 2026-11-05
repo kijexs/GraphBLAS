@@ -746,6 +746,11 @@
 #define GrB_Matrix_kronecker_Monoid_(...)           GrB_kronecker (__VA_ARGS__)
 #define GrB_Matrix_kronecker_Semiring_(...)         GrB_kronecker (__VA_ARGS__)
 
+// GrB_kronecker:
+#define GrB_Matrix_kronecker_BinaryOp_sel_(...)     GrB_kronecker_sel (__VA_ARGS__)
+#define GrB_Matrix_kronecker_Monoid_sel_(...)       GrB_kronecker_sel (__VA_ARGS__)
+#define GrB_Matrix_kronecker_Semiring_sel_(...)     GrB_kronecker_sel (__VA_ARGS__)
+
 // GxB_fprint:
 #define GxB_Type_fprint_(o,p,f)                     GxB_fprint (o,p,f)
 #define GxB_UnaryOp_fprint_(o,p,f)                  GxB_fprint (o,p,f)

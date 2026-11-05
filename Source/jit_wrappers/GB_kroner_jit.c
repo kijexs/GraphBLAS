@@ -18,9 +18,16 @@ GrB_Info GB_kroner_jit
     GrB_Matrix C,
     // input:
     const GrB_BinaryOp binaryop,
+    const GrB_IndexUnaryOp select,
+    const GB_void *y,
     const bool flipij,
     const GrB_Matrix A,
+    const bool A_transpose,
     const GrB_Matrix B,
+    const bool B_transpose,
+    const GrB_Matrix Mask,
+    const bool Mask_struct,
+    const bool Mask_comp,
     const int nthreads
 )
 { 
@@ -37,12 +44,18 @@ GrB_Info GB_kroner_jit
 
     GB_jit_encoding encoding ;
     char *suffix ;
+    GB_Opcode opcode_sel = (select == NULL) ? GB_NOP_code : select->opcode ;
     uint64_t hash = GB_encodify_ewise (&encoding, &suffix,
         GB_JIT_KERNEL_KRONER, /* is_ewisemult: */ false, /* C_iso: */ C->iso,
         /* C_in_iso: */ false, C_sparsity, C->type,
         C->p_is_32, C->j_is_32, C->i_is_32,
-        /* M: */ NULL, true, false, binaryop, flipij, false, A, B) ;
+        /* M: */ Mask, Mask_struct, Mask_comp, binaryop, flipij, false, A, B) ;
 
+    if (select != NULL)
+    {
+        hash ^= opcode_sel ;
+    }
+        
     //--------------------------------------------------------------------------
     // get the kernel function pointer, loading or compiling it if needed
     //--------------------------------------------------------------------------
@@ -50,7 +63,7 @@ GrB_Info GB_kroner_jit
     void *dl_function ;
     GrB_Info info = GB_jitifyer_load (&dl_function,
         GB_jit_ewise_family, "kroner",
-        hash, &encoding, suffix, NULL, NULL,
+        hash, &encoding, suffix, (GrB_Semiring) select, NULL,
         (GB_Operator) binaryop, C->type, A->type, B->type) ;
     if (info != GrB_SUCCESS) return (info) ;
 
@@ -60,6 +73,6 @@ GrB_Info GB_kroner_jit
 
     #include "include/GB_pedantic_disable.h"
     GB_jit_dl_function GB_jit_kernel = (GB_jit_dl_function) dl_function ;
-    return (GB_jit_kernel (C, A, B, nthreads, binaryop->theta, &GB_callback)) ;
+    return (GB_jit_kernel (C, A, A_transpose, B, B_transpose, flipij, Mask, Mask_struct, Mask_comp, nthreads, binaryop->theta, select, y, &GB_callback)) ;
 }
 

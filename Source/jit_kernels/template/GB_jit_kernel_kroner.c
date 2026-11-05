@@ -12,8 +12,59 @@
 GB_JIT_GLOBAL GB_JIT_KERNEL_KRONER_PROTO (GB_jit_kernel) ;
 GB_JIT_GLOBAL GB_JIT_KERNEL_KRONER_PROTO (GB_jit_kernel)
 {
-    GB_GET_CALLBACKS ;
-    #include "template/GB_kroner_template.c"
-    return (GrB_SUCCESS) ;
+    GB_GET_CALLBACKS;
+
+    if (Mask != NULL && !Mask_comp)
+    {
+        //--------------------------------------------------------------
+        // Mask-driven Kronecker
+        //--------------------------------------------------------------
+
+        #ifdef GB_HAS_SELECTOR
+
+        if (C->nvec == 0)
+        {
+            #include "template/GB_kroner_count_mask_template.c"
+        }
+        else
+
+        #endif
+
+        {
+            #include "template/GB_kroner_mask_template.c"
+        }
+    }
+    else
+    {
+        //--------------------------------------------------------------
+        // Product-driven Kronecker
+        //--------------------------------------------------------------
+
+        #ifdef GB_HAS_SELECTOR
+
+        if (C->nvec == 0)
+        {
+            #include "template/GB_kroner_count_sel_template.c"
+        }
+        else if (select != NULL && !C->iso)
+        {
+            #include "template/GB_kroner_sel_template.c"
+        }
+        else
+        {
+            #include "template/GB_kroner_template.c"
+        }
+
+        #else
+
+        if (C->nvec != 0)
+        {
+            #include "template/GB_kroner_template.c"
+        }
+
+        #endif
+    }
+
+    return (GrB_SUCCESS);
 }
 

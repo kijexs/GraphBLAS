@@ -1723,7 +1723,8 @@ GrB_Info GB_jitifyer_load2_worker
 //          GB_jit_query_func dl_query = (GB_jit_query_func) Queries [k1] ;
             GB_jit_query_func dl_query = GB_jitifyer_get_query (Queries [k1]) ;
             bool builtin = (encoding->suffix_len == 0) ;
-            bool ok = GB_jitifyer_query (dl_query, builtin, hash, semiring,
+            bool ok = GB_jitifyer_query (dl_query, builtin, hash,
+                (encoding->kcode == GB_JIT_KERNEL_KRONER) ? NULL : semiring,
                 monoid, op, type1, type2, type3) ;
             if (ok)
             { 
@@ -1952,7 +1953,8 @@ GrB_Info GB_jitifyer_load_worker
         if (ok)
         { 
             bool builtin = (encoding->suffix_len == 0) ;
-            ok = GB_jitifyer_query (dl_query, builtin, hash, semiring,
+            ok = GB_jitifyer_query (dl_query, builtin, hash,
+                (kcode == GB_JIT_KERNEL_KRONER) ? NULL : semiring,
                 monoid, op, type1, type2, type3) ;
         }
         if (!ok)
