@@ -119,7 +119,7 @@ void GB_enumify_ewise       // enumerate a GrB_eWise problem
     bool A_is_pattern = false ;
     bool B_is_pattern = false ;
 
-    if (is_eWiseMult || is_eWiseUnion || is_kronecker)
+    if (is_eWiseMult || is_eWiseUnion)
     { 
         A_is_pattern = (xcode == 0) ;   // A is not needed if x is not used
         B_is_pattern = (ycode == 0) ;   // B is not needed if y is not used

@@ -13,7 +13,32 @@ GB_JIT_GLOBAL GB_JIT_KERNEL_KRONER_PROTO (GB_jit_kernel) ;
 GB_JIT_GLOBAL GB_JIT_KERNEL_KRONER_PROTO (GB_jit_kernel)
 {
     GB_GET_CALLBACKS ;
-    #include "template/GB_kroner_template.c"
+#ifdef GB_HAS_SELECTOR
+    if (C->nvec == 0)
+    { 
+        #include "template/GB_kroner_count_sel_template.c"
+    }
+    else 
+    { 
+        if (select != NULL && !C->iso)
+        { 
+            #include "template/GB_kroner_sel_template.c"
+        }
+        else
+        { 
+            #include "template/GB_kroner_template.c"
+        }
+    }
+#else
+    if (C->nvec == 0)
+    { 
+        return (GrB_SUCCESS) ;
+    }
+    else
+    { 
+        #include "template/GB_kroner_template.c"
+    }
+#endif
     return (GrB_SUCCESS) ;
 }
 
