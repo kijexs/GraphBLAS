@@ -17,15 +17,15 @@
 // and the typecast Thunk.  Its result is typecast to bool to determine
 // whether the entry is kept.
 
-#define GB_FREE_WORKSPACE       \
-{                               \
-    GB_Matrix_free (&Awork) ;   \
-    GB_Matrix_free (&Bwork) ;   \
-    GB_FREE_MEMORY (&p, p_size) ; \
-    GB_FREE_MEMORY (&h32, h_size) ; \
-    GB_FREE_MEMORY (&h64, h_size) ; \
-    GB_FREE_MEMORY (&hp32, hp_size) ; \
-    GB_FREE_MEMORY (&hp64, hp_size) ; \
+#define GB_FREE_WORKSPACE               \
+{                                       \
+    GB_Matrix_free (&Awork) ;           \
+    GB_Matrix_free (&Bwork) ;           \
+    GB_FREE_MEMORY (&p, p_size) ;       \
+    GB_FREE_MEMORY (&h32, h_size) ;     \
+    GB_FREE_MEMORY (&h64, h_size) ;     \
+    GB_FREE_MEMORY (&hp32, hp_size) ;   \
+    GB_FREE_MEMORY (&hp64, hp_size) ;   \
 }
 
 #define GB_FREE_ALL             \
@@ -422,18 +422,18 @@ GrB_Info GB_kroner                  // C = kron (A,B)
                     if (select->xtype == NULL)                                                  \
                     {                                                                           \
                         /* C is iso and selector does not use the value */                      \
-                        if (select->ztype == GrB_BOOL)                                         \
-                        {                                                                      \
-                            sel (&keep, NULL, flipij_sel ? jC : iC,                            \
-                                flipij_sel ? iC : jC, y) ;                                     \
-                        }                                                                      \
-                        else                                                                   \
-                        {                                                                      \
-                            GB_void z [GB_VLA(zsize)] ;                                        \
-                            sel (z, NULL, flipij_sel ? jC : iC,                                \
-                                flipij_sel ? iC : jC, y) ;                                     \
-                            cast_Z_to_bool (&keep, z, zsize) ;                                 \
-                        }                                                                      \
+                        if (select->ztype == GrB_BOOL)                                          \
+                        {                                                                       \
+                            sel (&keep, NULL, flipij_sel ? jC : iC,                             \
+                                flipij_sel ? iC : jC, y) ;                                      \
+                        }                                                                       \
+                        else                                                                    \
+                        {                                                                       \
+                            GB_void z [GB_VLA(zsize)] ;                                         \
+                            sel (z, NULL, flipij_sel ? jC : iC,                                 \
+                                flipij_sel ? iC : jC, y) ;                                      \
+                            cast_Z_to_bool (&keep, z, zsize) ;                                  \
+                        }                                                                       \
                     }                                                                           \
                     else                                                                        \
                     {                                                                           \
@@ -460,18 +460,18 @@ GrB_Info GB_kroner                  // C = kron (A,B)
                     if (select->xtype == NULL)                                                  \
                     {                                                                           \
                         /* C is non-iso and selector is positional */                           \
-                        if (select->ztype == GrB_BOOL)                                         \
-                        {                                                                      \
-                            sel (&keep, NULL, flipij_sel ? jC : iC,                            \
-                                flipij_sel ? iC : jC, y) ;                                     \
-                        }                                                                      \
-                        else                                                                   \
-                        {                                                                      \
-                            GB_void z [GB_VLA(zsize)] ;                                        \
-                            sel (z, NULL, flipij_sel ? jC : iC,                                \
-                                flipij_sel ? iC : jC, y) ;                                     \
-                            cast_Z_to_bool (&keep, z, zsize) ;                                 \
-                        }                                                                      \
+                        if (select->ztype == GrB_BOOL)                                          \
+                        {                                                                       \
+                            sel (&keep, NULL, flipij_sel ? jC : iC,                             \
+                                flipij_sel ? iC : jC, y) ;                                      \
+                        }                                                                       \
+                        else                                                                    \
+                        {                                                                       \
+                            GB_void z [GB_VLA(zsize)] ;                                         \
+                            sel (z, NULL, flipij_sel ? jC : iC,                                 \
+                                flipij_sel ? iC : jC, y) ;                                      \
+                            cast_Z_to_bool (&keep, z, zsize) ;                                  \
+                        }                                                                       \
                     }                                                                           \
                     else if (select->ztype == GrB_BOOL && select->xtype == ctype)               \
                     {                                                                           \
@@ -930,18 +930,18 @@ GrB_Info GB_kroner                  // C = kron (A,B)
                 if (select->xtype == NULL)                                                  \
                 {                                                                           \
                     /* C is non-iso and selector is positional */                           \
-                    if (select->ztype == GrB_BOOL)                                             \
-                    {                                                                          \
-                        sel (&keep, NULL, flipij_sel ? jC : iC,                                \
-                            flipij_sel ? iC : jC, y) ;                                         \
-                    }                                                                          \
-                    else                                                                       \
-                    {                                                                          \
-                        GB_void z [GB_VLA(zsize)] ;                                            \
-                        sel (z, NULL, flipij_sel ? jC : iC,                                    \
-                            flipij_sel ? iC : jC, y) ;                                         \
-                        cast_Z_to_bool (&keep, z, zsize) ;                                     \
-                    }                                                                          \
+                    if (select->ztype == GrB_BOOL)                                          \
+                    {                                                                       \
+                        sel (&keep, NULL, flipij_sel ? jC : iC,                             \
+                            flipij_sel ? iC : jC, y) ;                                      \
+                    }                                                                       \
+                    else                                                                    \
+                    {                                                                       \
+                        GB_void z [GB_VLA(zsize)] ;                                         \
+                        sel (z, NULL, flipij_sel ? jC : iC,                                 \
+                            flipij_sel ? iC : jC, y) ;                                      \
+                        cast_Z_to_bool (&keep, z, zsize) ;                                  \
+                    }                                                                       \
                 }                                                                           \
                 else if (select->ztype == GrB_BOOL && select->xtype == ctype)               \
                 {                                                                           \

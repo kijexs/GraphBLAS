@@ -368,6 +368,18 @@ void GB_macrofy_ewise           // construct all macros for GrB_eWise
 
         int ccode = ctype->code ;
 
+        if (xcode_sel != 0 && ccode != xcode_sel)
+        {
+            GB_macrofy_cast_input(fp, "GB_CAST_KRON_C_TO_X", "x", "c_ptr",
+                "(*((GB_C_TYPE *)(c_ptr)))", xtype_sel, ctype) ;
+        }
+
+        if (zcode_sel != GB_BOOL_code)
+        {
+            GB_macrofy_cast_input(fp, "GB_CAST_KRON_Z_TO_BOOL", "z", "x",
+                "x", GrB_BOOL, ztype_sel) ;
+        }
+
         fprintf (fp, "#define GB_TEST_KRON_VALUE_OF_ENTRY(keep, c_ptr) \\\n"
                     "    bool keep ;                        \\\n"
                     "    GB_SEL_Y_TYPE y_val ;              \\\n"
@@ -393,26 +405,7 @@ void GB_macrofy_ewise           // construct all macros for GrB_eWise
                 else
                 {
                     // different type: use cast function
-                    int nargs_cx;
-                    const char *cast_c_to_x = GB_macrofy_cast_expression(fp,
-                        select->xtype, ctype, &nargs_cx);
-                    if (cast_c_to_x == NULL)
-                    {
-                        fprintf (fp, "    x_val = (GB_SEL_X_TYPE) (*((GB_C_TYPE *)(c_ptr))) ; \\\n") ;
-                    }
-                    else
-                    {
-                        fprintf (fp, "    { GB_C_TYPE cwork = *((GB_C_TYPE *)(c_ptr)) ; \\\n") ;
-                        if (nargs_cx == 3)
-                        {
-                            fprintf (fp, cast_c_to_x, "      x_val", "cwork", "cwork") ;
-                        }
-                        else
-                        {
-                            fprintf (fp, cast_c_to_x, "      x_val", "cwork") ;
-                        }
-                        fprintf (fp, " ; } \\\n") ;
-                    }
+                    fprintf (fp, "    GB_CAST_KRON_C_TO_X(x_val, c_ptr) ; \\\n") ;
                 }
                 fprintf (fp, "    GB_IDXUNOP (keep, x_val, iC, jC, y_val) ;\n") ;
             }
@@ -434,41 +427,13 @@ void GB_macrofy_ewise           // construct all macros for GrB_eWise
                 }
                 else
                 {
-                    int nargs_cx;
-                    const char *cast_c_to_x = GB_macrofy_cast_expression(fp,
-                        select->xtype, ctype, &nargs_cx);
-                    fprintf (fp, "    { GB_C_TYPE cwork = *((GB_C_TYPE *)(c_ptr)) ; \\\n") ;
-                    if (cast_c_to_x == NULL)
-                    {
-                        fprintf (fp, "      x_val = (GB_SEL_X_TYPE) cwork ; \\\n") ;
-                    }
-                    else if (nargs_cx == 3)
-                    {
-                        fprintf (fp, cast_c_to_x, "        x_val", "cwork", "cwork") ;
-                    }
-                    else
-                    {
-                        fprintf (fp, cast_c_to_x, "        x_val", "cwork") ;
-                    }
-                    fprintf (fp, " ; } \\\n") ;
+                    fprintf (fp, "    GB_CAST_KRON_C_TO_X(x_val, c_ptr) ; \\\n") ;
                 }
                 fprintf (fp, "    GB_IDXUNOP (z_val, x_val, iC, jC, y_val) ; \\\n") ;
             }
 
             // cast z_val to bool
-            int nargs_z;
-            const char *cast_z_to_bool = GB_macrofy_cast_expression(fp,
-                GrB_BOOL, select->ztype, &nargs_z);
-            ASSERT (cast_z_to_bool != NULL);
-            if (nargs_z == 3)
-            {
-                fprintf (fp, cast_z_to_bool, "    keep", "z_val", "z_val") ;
-            }
-            else
-            {
-                fprintf (fp, cast_z_to_bool, "    keep", "z_val") ;
-            }
-            fprintf (fp, " ;\n") ;
+            fprintf (fp, "    GB_CAST_KRON_Z_TO_BOOL(keep, z_val) ;\n") ;
         }
     }
 

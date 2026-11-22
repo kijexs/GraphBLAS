@@ -62,7 +62,7 @@
     #define GB_LOOKUP_XOFFSET_BITMAP_FULL(offset, A)    \
     {                                                   \
         GrB_Index offset_ = vector_ * (A)->vlen +       \
-                                coord_ ;                   \
+                                coord_ ;                \
         if ((A)->b == NULL ||                           \
             (((int8_t *) (A)->b)[offset_]))             \
         {                                               \
@@ -77,8 +77,8 @@
     #define GB_LOOKUP_XOFFSET_SPARSE(offset, A)         \
     {                                                   \
         start_ = (A)->p_is_32 ?                         \
-                    ((int32_t *)(A)->p) [vector_] :       \
-                    ((int64_t *)(A)->p) [vector_] ;       \
+                    ((int32_t *)(A)->p) [vector_] :     \
+                    ((int64_t *)(A)->p) [vector_] ;     \
         end_ = (A)->p_is_32 ?                           \
                 ((int32_t *)(A)->p) [vector_ + 1] :     \
                 ((int64_t *)(A)->p) [vector_ + 1] ;     \
@@ -114,8 +114,8 @@
         {                                               \
             int64_t k_ = start_ ;                       \
             start_ = (A)->p_is_32 ?                     \
-                        ((int32_t *)(A)->p) [k_] :        \
-                        ((int64_t *)(A)->p) [k_] ;        \
+                        ((int32_t *)(A)->p) [k_] :      \
+                        ((int64_t *)(A)->p) [k_] ;      \
             end_ = (A)->p_is_32 ?                       \
                     ((int32_t *)(A)->p) [k_ + 1] :      \
                     ((int64_t *)(A)->p) [k_ + 1] ;      \

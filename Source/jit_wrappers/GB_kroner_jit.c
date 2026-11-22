@@ -44,16 +44,41 @@ GrB_Info GB_kroner_jit
 
     GB_jit_encoding encoding ;
     char *suffix ;
-    GB_Opcode opcode_sel = (select == NULL) ? GB_NOP_code : select->opcode ;
     uint64_t hash = GB_encodify_ewise (&encoding, &suffix,
         GB_JIT_KERNEL_KRONER, /* is_ewisemult: */ false, /* C_iso: */ C->iso,
         /* C_in_iso: */ false, C_sparsity, C->type,
         C->p_is_32, C->j_is_32, C->i_is_32,
         /* M: */ Mask, Mask_struct, Mask_comp, binaryop, flipij, false, A, B) ;
 
-    if (select != NULL)
+    // Include both operator and selector information in the JIT kernel name
+    // to avoid filename collisions between different specializations.
+    char combined_suffix [GB_KLEN] ;
+
+    if (hash != UINT64_MAX && select != NULL)
     {
-        hash ^= opcode_sel ;
+        GB_jit_encoding sel_encoding ;
+        char *sel_suffix ;
+
+        uint64_t sel_hash = GB_encodify_select(&sel_encoding, &sel_suffix,
+            GB_JIT_KERNEL_SELECT_BITMAP, C, select, false, C) ;
+
+        if (sel_hash == UINT64_MAX)
+        {
+            hash = UINT64_MAX ;
+        }
+        else
+        {
+            uint64_t hashes[2] = {hash, sel_hash} ;
+            hash = GB_jitifyer_hash(hashes, sizeof(hashes), true) ;
+        }
+
+        int n = snprintf (combined_suffix, sizeof (combined_suffix),
+            "%s%s%016" PRIx64 "%s%s", (suffix != NULL) ? suffix : "",
+            (suffix != NULL) ? "_" : "", sel_encoding.code,
+            (sel_suffix != NULL) ? "_" : "", (sel_suffix != NULL) ? sel_suffix : "") ;
+
+        suffix = combined_suffix ;
+        encoding.suffix_len = (uint32_t) n ;
     }
         
     //--------------------------------------------------------------------------
