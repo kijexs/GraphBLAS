@@ -10,7 +10,7 @@
 #include "GB_mex.h"
 #include "GB_mex_errors.h"
 
-#define USAGE "C = GB_mex_kron_idx (A, B, atrans, btrans, C_is_csc)"
+#define USAGE "C = GB_mex_kron_idx (A, B, atrans, btrans, C_is_csc [, sel, scalar])"
 
 void gb_mykronidx (double *z,
     const void *x, uint64_t ix, uint64_t jx,
@@ -30,7 +30,7 @@ void gb_mykronidx (double *z,
 }
 
 #define MYKRONIDX_DEFN                              \
-"void gb_mykronidx (double *z,                     \n" \
+"void gb_mykronidx (double *z,                  \n" \
 "   const void *x, uint64_t ix, uint64_t jx,    \n" \
 "   const void *y, uint64_t iy, uint64_t jy,    \n" \
 "   const int64_t *theta)                       \n" \
@@ -51,6 +51,7 @@ void gb_mykronidx (double *z,
     GrB_BinaryOp_free (&mult) ;     \
     GxB_IndexBinaryOp_free (&Iop) ; \
     GrB_Descriptor_free (&desc) ;   \
+    GrB_Matrix_free_(&Y) ;          \
     GB_mx_put_global (true) ;       \
 }
 
@@ -72,10 +73,14 @@ void mexFunction
     GrB_BinaryOp mult = NULL ;
     GxB_IndexBinaryOp Iop = NULL ;
     GrB_Descriptor desc = NULL ;
+    
+    GrB_IndexUnaryOp sel = NULL ;
+    GrB_Matrix Y = NULL ;
+    GrB_Scalar scalar = NULL ;
+    
     uint64_t anrows = 0, ancols = 0, bnrows = 0, bncols = 0 ;
 
-    // check inputs
-    if (nargout > 1 || nargin < 2 || nargin > 5)
+    if (nargout > 1 || nargin < 2 || nargin > 7)
     {
         mexErrMsgTxt ("Usage: " USAGE) ;
     }
@@ -139,12 +144,54 @@ void mexFunction
     OK (GrB_Scalar_setElement_INT64 (Theta, theta)) ;
     OK (GxB_BinaryOp_new_IndexOp (&mult, Iop, Theta)) ;
 
-    // C = kron(A,B)
-    METHOD (GrB_Matrix_kronecker_BinaryOp_ (C, NULL, NULL, mult, A, B, desc)) ;
+    // get selector (sel) and scalar (y), if present
+    if (nargin >= 6)
+    {
+        if (!GB_mx_mxArray_to_IndexUnaryOp (&sel, pargin [5], "sel",
+            C->type) || sel == NULL)
+        {
+            FREE_ALL ;
+            mexErrMsgTxt ("sel failed") ;
+        }
+
+        if (nargin >= 7)
+        {
+            Y = GB_mx_mxArray_to_Matrix (pargin [6], "y input", false, true) ;
+            if (Y == NULL || Y->magic != GB_MAGIC)
+            {
+                FREE_ALL ;
+                mexErrMsgTxt ("y failed") ;
+            }
+            
+            uint64_t ynrows, yncols, ynvals ;
+            GrB_Matrix_nrows (&ynrows, Y) ;
+            GrB_Matrix_ncols (&yncols, Y) ;
+            GrB_Matrix_nvals (&ynvals, Y) ;
+            int yfmt ;
+            GxB_Matrix_Option_get_ (Y, GxB_FORMAT, &yfmt) ;
+            
+            if (ynrows != 1 || yncols != 1 || ynvals != 1 || yfmt != GxB_BY_COL)
+            {
+                FREE_ALL ;
+                mexErrMsgTxt ("y failed") ;
+            }
+            
+            scalar = (GrB_Scalar) Y ;
+        }
+    }
+
+    if (sel != NULL)
+    {
+        METHOD (GrB_Matrix_kronecker_BinaryOp_sel_ (C, NULL, NULL, mult, 
+            A, B, desc, sel, scalar)) ;
+    }
+    else
+    {
+        METHOD (GrB_Matrix_kronecker_BinaryOp_ (C, NULL, NULL, mult, A, B, desc)) ;
+    }
 
     // return C as a MATLAB sparse matrix and free the GraphBLAS C
     pargout [0] = GB_mx_Matrix_to_mxArray (&C, "C output", false) ;
 
     FREE_ALL ;
 }
-

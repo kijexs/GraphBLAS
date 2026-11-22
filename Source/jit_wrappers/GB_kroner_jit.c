@@ -18,9 +18,16 @@ GrB_Info GB_kroner_jit
     GrB_Matrix C,
     // input:
     const GrB_BinaryOp binaryop,
+    const GrB_IndexUnaryOp select,
+    const GB_void *y,
     const bool flipij,
     const GrB_Matrix A,
+    const bool A_transpose,
     const GrB_Matrix B,
+    const bool B_transpose,
+    const GrB_Matrix Mask,
+    const bool Mask_struct,
+    const bool Mask_comp,
     const int nthreads
 )
 { 
@@ -41,8 +48,39 @@ GrB_Info GB_kroner_jit
         GB_JIT_KERNEL_KRONER, /* is_ewisemult: */ false, /* C_iso: */ C->iso,
         /* C_in_iso: */ false, C_sparsity, C->type,
         C->p_is_32, C->j_is_32, C->i_is_32,
-        /* M: */ NULL, true, false, binaryop, flipij, false, A, B) ;
+        /* M: */ Mask, Mask_struct, Mask_comp, binaryop, flipij, false, A, B) ;
 
+    // Include both operator and selector information in the JIT kernel name
+    // to avoid filename collisions between different specializations.
+    char combined_suffix [GB_KLEN] ;
+
+    if (hash != UINT64_MAX && select != NULL)
+    {
+        GB_jit_encoding sel_encoding ;
+        char *sel_suffix ;
+
+        uint64_t sel_hash = GB_encodify_select(&sel_encoding, &sel_suffix,
+            GB_JIT_KERNEL_SELECT_BITMAP, C, select, false, C) ;
+
+        if (sel_hash == UINT64_MAX)
+        {
+            hash = UINT64_MAX ;
+        }
+        else
+        {
+            uint64_t hashes[2] = {hash, sel_hash} ;
+            hash = GB_jitifyer_hash(hashes, sizeof(hashes), true) ;
+        }
+
+        int n = snprintf (combined_suffix, sizeof (combined_suffix),
+            "%s%s%016" PRIx64 "%s%s", (suffix != NULL) ? suffix : "",
+            (suffix != NULL) ? "_" : "", sel_encoding.code,
+            (sel_suffix != NULL) ? "_" : "", (sel_suffix != NULL) ? sel_suffix : "") ;
+
+        suffix = combined_suffix ;
+        encoding.suffix_len = (uint32_t) n ;
+    }
+        
     //--------------------------------------------------------------------------
     // get the kernel function pointer, loading or compiling it if needed
     //--------------------------------------------------------------------------
@@ -50,7 +88,7 @@ GrB_Info GB_kroner_jit
     void *dl_function ;
     GrB_Info info = GB_jitifyer_load (&dl_function,
         GB_jit_ewise_family, "kroner",
-        hash, &encoding, suffix, NULL, NULL,
+        hash, &encoding, suffix, (GrB_Semiring) select, NULL,
         (GB_Operator) binaryop, C->type, A->type, B->type) ;
     if (info != GrB_SUCCESS) return (info) ;
 
@@ -60,6 +98,6 @@ GrB_Info GB_kroner_jit
 
     #include "include/GB_pedantic_disable.h"
     GB_jit_dl_function GB_jit_kernel = (GB_jit_dl_function) dl_function ;
-    return (GB_jit_kernel (C, A, B, nthreads, binaryop->theta, &GB_callback)) ;
+    return (GB_jit_kernel (C, A, A_transpose, B, B_transpose, flipij, Mask, Mask_struct, Mask_comp, nthreads, binaryop->theta, select, y, &GB_callback)) ;
 }
 
